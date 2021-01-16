@@ -34,9 +34,8 @@ func main() {
 	if err != nil {
 		log.Fatal("Could not parse redirect URL", err)
 	}
-	// authSvc := auth.New(clientID, clientSecret, redirectURL, log)
-	authSvc := spotify.New(clientID, clientSecret, *redirectURL, log)
 
+	authSvc := spotify.NewAuthService(clientID, clientSecret, *redirectURL, log)
 	srv := server.New(authSvc, log.With("addr", addr))
 
 	errs := make(chan error, 2)

@@ -30,14 +30,14 @@ type keyValueStore interface {
 	Get(key string, out interface{}) (bool, error)
 }
 
-type service struct {
+type authService struct {
 	authenticator spotify.Authenticator
 	redirectURL   url.URL
 
 	log logging.Logger
 }
 
-func New(clientID, clientSecret string, redirectURL url.URL, log logging.Logger) *service {
+func NewAuthService(clientID, clientSecret string, redirectURL url.URL, log logging.Logger) *authService {
 	authenticator := spotify.NewAuthenticator(
 		redirectURL.String(),
 		spotify.ScopeUserReadPrivate,
@@ -50,18 +50,18 @@ func New(clientID, clientSecret string, redirectURL url.URL, log logging.Logger)
 	)
 	authenticator.SetAuthInfo(clientID, clientSecret)
 
-	return &service{
+	return &authService{
 		authenticator: authenticator,
 		redirectURL:   redirectURL,
 		log:           log,
 	}
 }
 
-func (s *service) TokenCallbackHandler() http.HandlerFunc {
+func (a *authService) TokenCallbackHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		c, _ := r.Cookie(CookieState)
 		if c == nil || c.Value == "" {
-			s.log.Error("Missing required cookie", fmt.Errorf("Missing required cookie %s", CookieState))
+			a.log.Error("Missing required cookie", fmt.Errorf("Missing required cookie %s", CookieState))
 			httphelpers.InternalServerError(w)
 			return
 		}
@@ -69,21 +69,21 @@ func (s *service) TokenCallbackHandler() http.HandlerFunc {
 		state, err := url.QueryUnescape(c.Value)
 		httphelpers.ClearCookie(w, c)
 		if err != nil {
-			s.log.Error("Failed to escape state", err)
+			a.log.Error("Failed to escape state", err)
 			httphelpers.InternalServerError(w)
 			return
 		}
 
-		token, err := s.authenticator.Token(state, r)
+		token, err := a.authenticator.Token(state, r)
 		if err != nil {
-			s.log.Error("Failed to get token", err)
+			a.log.Error("Failed to get token", err)
 			httphelpers.InternalServerError(w)
 			return
 		}
 
 		tokenB, err := json.Marshal(token)
 		if err != nil {
-			s.log.Error("Failed to marshal token", err)
+			a.log.Error("Failed to marshal token", err)
 			httphelpers.InternalServerError(w)
 			return
 		}
@@ -104,7 +104,7 @@ func (s *service) TokenCallbackHandler() http.HandlerFunc {
 			redirectTo, err := url.QueryUnescape(gc.Value)
 			httphelpers.ClearCookie(w, gc)
 			if err != nil {
-				s.log.Error("Failed to get token", err)
+				a.log.Error("Failed to get token", err)
 				httphelpers.InternalServerError(w)
 				return
 			}
@@ -117,7 +117,7 @@ func (s *service) TokenCallbackHandler() http.HandlerFunc {
 	}
 }
 
-func (s *service) Middleware() func(h http.Handler) http.Handler {
+func (a *authService) Middleware() func(h http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			c, _ := r.Cookie(CookieSpotifyToken)
@@ -127,12 +127,12 @@ func (s *service) Middleware() func(h http.Handler) http.Handler {
 				err := json.Unmarshal(decoded, token)
 
 				if err != nil {
-					s.log.With("error", err).Warn("Failed to unmarshal token")
-					s.Redirect(w, r)
+					a.log.With("error", err).Warn("Failed to unmarshal token")
+					a.Redirect(w, r)
 					return
 				}
 				if !token.Valid() {
-					s.Redirect(w, r)
+					a.Redirect(w, r)
 					return
 				}
 
@@ -141,24 +141,24 @@ func (s *service) Middleware() func(h http.Handler) http.Handler {
 				return
 			}
 
-			s.Redirect(w, r)
+			a.Redirect(w, r)
 		})
 	}
 }
 
-func (s *service) GetClient(r *http.Request) (Client, error) {
+func (a *authService) GetClient(r *http.Request) (Client, error) {
 	token, ok := r.Context().Value(ContextToken).(*oauth2.Token)
 	if !ok {
 		return nil, AuthenticationError
 	}
-	spotifyClient := s.authenticator.NewClient(token)
+	spotifyClient := a.authenticator.NewClient(token)
 	return &client{
 		spotify: spotifyClient,
-		log:     s.log,
+		log:     a.log,
 	}, nil
 }
 
-func (s *service) Redirect(w http.ResponseWriter, r *http.Request) {
+func (a *authService) Redirect(w http.ResponseWriter, r *http.Request) {
 	state := uuid.NewV4().String()
 
 	http.SetCookie(w, &http.Cookie{
@@ -183,6 +183,6 @@ func (s *service) Redirect(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	authURL := s.authenticator.AuthURL(state)
+	authURL := a.authenticator.AuthURL(state)
 	http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
 }
