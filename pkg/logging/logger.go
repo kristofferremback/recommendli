@@ -34,7 +34,7 @@ type stackTracer interface {
 	StackTrace() errors.StackTrace
 }
 
-func New(opts ...Option) Logger {
+func New(opts ...Option) *Log {
 	log := &Log{
 		level:     _defaultLevel,
 		formatter: _defaultFormatter,
@@ -50,19 +50,15 @@ func New(opts ...Option) Logger {
 	return log
 }
 
-func (l *Log) log(level Level, message string, meta Meta) {
+func (l *Log) log(level Level, message string, metas ...Meta) {
 	if level < l.level {
 		return
-	}
-
-	if meta == nil {
-		meta = Meta{}
 	}
 
 	msg := &Message{
 		Level:     level,
 		Body:      message,
-		Meta:      meta,
+		Meta:      combineMetas(metas...),
 		Timestamp: time.Now(),
 		Caller:    getCaller(4),
 	}
@@ -77,30 +73,30 @@ func (l *Log) log(level Level, message string, meta Meta) {
 	fmt.Fprint(l.transport, string(out))
 }
 
-func (l *Log) Debug(message string) {
-	l.log(LevelDebug, message, nil)
+func (l *Log) Debug(message string, fields ...interface{}) {
+	l.log(LevelDebug, message, toMeta(fields))
 }
 
-func (l *Log) Info(message string) {
-	l.log(LevelInfo, message, nil)
+func (l *Log) Info(message string, fields ...interface{}) {
+	l.log(LevelInfo, message, toMeta(fields))
 }
 
-func (l *Log) Warn(message string) {
-	l.log(LevelWarn, message, nil)
+func (l *Log) Warn(message string, fields ...interface{}) {
+	l.log(LevelWarn, message, toMeta(fields))
 }
 
-func (l *Log) Error(message string, err error) {
-	l.log(LevelError, message, l.metaWithError(err))
+func (l *Log) Error(message string, err error, fields ...interface{}) {
+	l.log(LevelError, message, l.metaWithError(err), toMeta(fields))
 }
 
-func (l *Log) Fatal(message string, err error) {
+func (l *Log) Fatal(message string, err error, fields ...interface{}) {
 	defer os.Exit(1)
 	defer l.Sync()
 
 	l.log(LevelFatal, message, l.metaWithError(err))
 }
 
-func (l *Log) WithFields(fields Meta) Logger {
+func (l *Log) WithMeta(meta Meta) *Log {
 	log := &Log{
 		level:     l.level,
 		formatter: l.formatter,
@@ -113,14 +109,14 @@ func (l *Log) WithFields(fields Meta) Logger {
 		log.meta[key] = value
 	}
 
-	for key, value := range fields {
+	for key, value := range meta {
 		log.meta[key] = value
 	}
 
 	return log
 }
 
-func (l *Log) With(key string, value interface{}) Logger {
+func (l *Log) With(key string, value interface{}) *Log {
 	log := &Log{
 		level:     l.level,
 		formatter: l.formatter,
@@ -137,7 +133,7 @@ func (l *Log) With(key string, value interface{}) Logger {
 	return log
 }
 
-func (l *Log) WithOptions(opts ...Option) Logger {
+func (l *Log) WithOptions(opts ...Option) *Log {
 	log := &Log{
 		level:     l.level,
 		formatter: l.formatter,
@@ -177,6 +173,48 @@ func (l *Log) metaWithError(err error) Meta {
 		}
 
 		meta["stack"] = stack
+	}
+
+	return meta
+}
+
+func combineMetas(metas ...Meta) Meta {
+	out := Meta{}
+	for _, m := range metas {
+		for k, v := range m {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+func toMeta(fields []interface{}) Meta {
+	meta := Meta{}
+	var currKey string
+	var currValue interface{}
+	var lastI int
+
+	for i, field := range fields {
+		lastI = i
+		if i%2 == 0 {
+			switch f := field.(type) {
+			case string:
+				currKey = f
+			case fmt.Stringer:
+				currKey = f.String()
+			default:
+				currKey = fmt.Sprintf("%v", f)
+			}
+		} else {
+			currValue = field
+		}
+		if i%2 == 1 {
+			meta[currKey] = currValue
+		}
+	}
+
+	if lastI%2 == 0 && lastI > 0 {
+		meta[currKey] = "<unbalanced field pairs>"
 	}
 
 	return meta

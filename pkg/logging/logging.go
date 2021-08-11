@@ -13,15 +13,10 @@ func (c Config) Apply(log *Log) {
 type Meta map[string]interface{}
 
 type Logger interface {
-	Debug(message string)
-	Info(message string)
-	Warn(message string)
-	Error(message string, err error)
-	Fatal(message string, err error)
-	WithFields(fields Meta) Logger
-	With(key string, value interface{}) Logger
-	WithOptions(opts ...Option) Logger
-	Sync() error
+	Debug(message string, fields ...interface{})
+	Info(message string, fields ...interface{})
+	Warn(message string, fields ...interface{})
+	Error(message string, err error, fields ...interface{})
 }
 
 type Option interface {

@@ -20,7 +20,7 @@ func (s *Server) spotifyGetPlaylists() http.HandlerFunc {
 		}
 		pl, err := c.ListPlaylists(usr)
 		if err != nil {
-			s.log.With("user_id", usr.ID).Error("Failed to get playlists", err)
+			s.log.Error("Failed to get playlists", err, "user_id", usr.ID)
 			s.internalServerError(w)
 			return
 		}

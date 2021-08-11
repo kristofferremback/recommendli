@@ -18,9 +18,12 @@ const (
 	defaultAddr = ":9999"
 )
 
+var defaultSpotifyRedirectHost = fmt.Sprintf("http://localhost%s", defaultAddr)
+
 func main() {
 	var (
-		addr = flag.String("addr", defaultAddr, "HTTP address")
+		addr                = flag.String("addr", defaultAddr, "HTTP address")
+		spotifyRedirectHost = flag.String("spotify-redirect-host", defaultSpotifyRedirectHost, "Spotify redirect host")
 		// ctx  = context.Background()
 
 		clientID     = envString("SPOTIFY_ID", "")
@@ -28,19 +31,20 @@ func main() {
 	)
 	flag.Parse()
 
-	log := logging.New(logging.LevelInfo, logging.FormatConsolePretty)
+	log := logging.New(logging.LevelInfo, logging.FormatConsolePretty).With("addr", *addr)
 
-	redirectURL, err := url.Parse(fmt.Sprintf("http://localhost%s/v1/spotify/auth/callback", *addr))
+	spotifyRedirectURLstr := fmt.Sprintf("%s/v1/spotify/auth/callback", *spotifyRedirectHost)
+	redirectURL, err := url.Parse(spotifyRedirectURLstr)
 	if err != nil {
-		log.Fatal("Could not parse redirect URL", err)
+		log.Fatal("Could not parse redirect URL", err, "spotifyRedirectSpotifyURL", spotifyRedirectURLstr)
 	}
 
 	authSvc := spotify.NewAuthService(clientID, clientSecret, *redirectURL, log)
-	srv := server.New(authSvc, log.With("addr", addr))
+	srv := server.New(authSvc, log)
 
 	errs := make(chan error, 2)
 	go func() {
-		log.With("addr", *addr).Info("Starting server")
+		log.Info("Starting server")
 		errs <- http.ListenAndServe(*addr, srv)
 	}()
 	go func() {

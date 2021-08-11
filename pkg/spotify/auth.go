@@ -125,9 +125,8 @@ func (a *authService) Middleware() func(h http.Handler) http.Handler {
 				token := &oauth2.Token{}
 				decoded, _ := base64.StdEncoding.DecodeString(c.Value)
 				err := json.Unmarshal(decoded, token)
-
 				if err != nil {
-					a.log.With("error", err).Warn("Failed to unmarshal token")
+					a.log.Warn("Failed to unmarshal token", "error", err)
 					a.Redirect(w, r)
 					return
 				}
