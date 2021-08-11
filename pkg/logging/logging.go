@@ -1,5 +1,7 @@
 package logging
 
+var GlobaLogger *Log = New(LevelInfo, FormatConsole)
+
 type Config struct {
 	Level  string `envconfig:"LOG_LEVEL" default:"info"`
 	Format string `envconfig:"LOG_FORMAT" default:"json"`
