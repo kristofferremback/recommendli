@@ -167,7 +167,6 @@ func (l *Log) metaWithError(err error) Meta {
 	if err, ok := err.(stackTracer); ok {
 		stack := []string{}
 		for _, f := range err.StackTrace() {
-
 			t, _ := f.MarshalText()
 			stack = append(stack, string(t))
 		}

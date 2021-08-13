@@ -31,7 +31,7 @@ func main() {
 	)
 	flag.Parse()
 
-	log := logging.New(logging.LevelInfo, logging.FormatConsolePretty).With("addr", *addr)
+	log := logging.New(logging.LevelInfo, logging.FormatConsolePretty)
 	// nolint errcheck
 	defer log.Sync()
 
@@ -51,7 +51,7 @@ func main() {
 
 	errs := make(chan error, 2)
 	go func() {
-		log.Info("Starting server")
+		log.Info("Starting server", "addr", *addr)
 		errs <- http.ListenAndServe(*addr, r)
 	}()
 	go func() {

@@ -41,17 +41,16 @@ func (h *httpHandler) withService(sHandler spotifyClientHandlerFunc) http.Handle
 			srv.InternalServerError(w)
 			return
 		}
-
-		svc := h.svcFactory.NewService(spotifyClient)
-		sHandler(svc)(w, r)
+		sHandler(h.svcFactory.New(spotifyClient))(w, r)
 	}
 }
 
 func (h *httpHandler) whoami(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		usr, err := svc.currentUser()
+		usr, err := svc.currentUser(r.Context())
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Internal server error: %s", err), 500)
+			h.log.Error("getting current user", err)
+			srv.InternalServerError(w)
 			return
 		}
 		srv.JSON(w, usr)
@@ -60,15 +59,16 @@ func (h *httpHandler) whoami(svc *Service) http.HandlerFunc {
 
 func (h *httpHandler) listPlaylists(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		usr, err := svc.currentUser()
+		usr, err := svc.currentUser(r.Context())
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Internal server error: %s", err), 500)
+			h.log.Error("getting current user", err)
+			srv.InternalServerError(w)
 			return
 		}
-
-		playlists, err := svc.listPlaylists(usr)
+		playlists, err := svc.listPlaylists(r.Context(), usr)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Internal server error: %s", err), 500)
+			h.log.Error("getting user's playlists", err)
+			srv.InternalServerError(w)
 			return
 		}
 		sort.Slice(playlists, func(i, j int) bool {

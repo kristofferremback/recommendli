@@ -1,9 +1,11 @@
 package spotifypaginator
 
 import (
+	"context"
 	"fmt"
 	"math"
 
+	"github.com/kristofferostlund/recommendli/pkg/ctxhelper"
 	"github.com/zmb3/spotify"
 )
 
@@ -54,11 +56,18 @@ func ProgressReporter(progressReporter ProgressReporterFunc) OptFuncs {
 // or the current count matches the total count which is set by calling nextFunc(currentCount, totalCount)
 // whichever comes first.
 // The easiest way to stop the paginator without an error is to `return nil, nil`.
-func (p *Paginator) Run(paginate Func) error {
+func (p *Paginator) Run(ctx context.Context, paginate Func) error {
 	var err error
+	if err = ctxhelper.Closed(ctx); err != nil {
+		return err
+	}
+
 	currentCount, totalCount := 0, math.MaxInt64
 	currentPage := 0
 	for currentCount < totalCount {
+		if err = ctxhelper.Closed(ctx); err != nil {
+			return fmt.Errorf("paginating: %w", err)
+		}
 		var result *NextResult
 		result, err = paginate(&spotify.Options{Limit: &p.pageSize, Offset: &currentCount}, nextFunc)
 		if err != nil {

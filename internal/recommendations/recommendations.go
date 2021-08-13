@@ -1,8 +1,10 @@
 package recommendations
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/kristofferostlund/recommendli/pkg/ctxhelper"
 	"github.com/kristofferostlund/recommendli/pkg/logging"
 	"github.com/kristofferostlund/recommendli/pkg/spotifypaginator"
 	"github.com/zmb3/spotify"
@@ -23,7 +25,7 @@ func NewServiceFactory(log logging.Logger) *ServiceFactory {
 	return &ServiceFactory{log: log}
 }
 
-func (s *ServiceFactory) NewService(spotifyClient spotify.Client) *Service {
+func (s *ServiceFactory) New(spotifyClient spotify.Client) *Service {
 	return &Service{log: s.log, spotify: spotifyClient}
 }
 
@@ -32,7 +34,10 @@ type Service struct {
 	spotify spotify.Client
 }
 
-func (s *Service) listPlaylists(usr spotify.User) ([]spotify.SimplePlaylist, error) {
+func (s *Service) listPlaylists(ctx context.Context, usr spotify.User) ([]spotify.SimplePlaylist, error) {
+	if err := ctxhelper.Closed(ctx); err != nil {
+		return nil, fmt.Errorf("listing playlists for user %s: %w", usr.ID, err)
+	}
 	playlists := make([]spotify.SimplePlaylist, 0)
 	paginator := spotifypaginator.New(
 		spotifypaginator.PageSize(50),
@@ -40,7 +45,7 @@ func (s *Service) listPlaylists(usr spotify.User) ([]spotify.SimplePlaylist, err
 			s.log.Info("listing simple playlists", "user", usr.DisplayName, "count", currentCount, "total", totalCount, "page", currentPage)
 		}),
 	)
-	if err := paginator.Run(func(opts *spotify.Options, next spotifypaginator.NextFunc) (*spotifypaginator.NextResult, error) {
+	if err := paginator.Run(ctx, func(opts *spotify.Options, next spotifypaginator.NextFunc) (*spotifypaginator.NextResult, error) {
 		r, err := s.spotify.GetPlaylistsForUserOpt(usr.ID, opts)
 		if err != nil {
 			return nil, fmt.Errorf("listing playlists for user %s: %w", usr.ID, err)
@@ -48,13 +53,16 @@ func (s *Service) listPlaylists(usr spotify.User) ([]spotify.SimplePlaylist, err
 		playlists = append(playlists, r.Playlists...)
 		return next(len(playlists), r.Total), nil
 	}); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("listing playlists for user %s: %w", usr.ID, err)
 	}
 
 	return playlists, nil
 }
 
-func (s *Service) currentUser() (spotify.User, error) {
+func (s *Service) currentUser(ctx context.Context) (spotify.User, error) {
+	if err := ctxhelper.Closed(ctx); err != nil {
+		return spotify.User{}, fmt.Errorf("getting current user: %w", err)
+	}
 	usr, err := s.spotify.CurrentUser()
 	if err != nil {
 		return spotify.User{}, fmt.Errorf("getting current user: %w", err)
