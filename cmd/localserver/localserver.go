@@ -25,7 +25,6 @@ func main() {
 	var (
 		addr                = flag.String("addr", defaultAddr, "HTTP address")
 		spotifyRedirectHost = flag.String("spotify-redirect-host", defaultSpotifyRedirectHost, "Spotify redirect host")
-		// ctx  = context.Background()
 
 		clientID     = envString("SPOTIFY_ID", "")
 		clientSecret = envString("SPOTIFY_SECRET", "")
@@ -33,6 +32,8 @@ func main() {
 	flag.Parse()
 
 	log := logging.New(logging.LevelInfo, logging.FormatConsolePretty).With("addr", *addr)
+	// nolint errcheck
+	defer log.Sync()
 
 	spotifyRedirectURLstr := fmt.Sprintf("%s/recommendations/v1/spotify/auth/callback", *spotifyRedirectHost)
 	redirectURL, err := url.Parse(spotifyRedirectURLstr)
@@ -46,7 +47,7 @@ func main() {
 
 	authAdaptor := recommendations.NewSpotifyAuthAdaptor(clientID, clientSecret, *redirectURL, log)
 	r.Get(authAdaptor.Path(), authAdaptor.TokenCallbackHandler())
-	r.Mount("/recommendations", recommendations.NewRouter(recommendations.NewServiceFactory(), authAdaptor, log))
+	r.Mount("/recommendations", recommendations.NewRouter(recommendations.NewServiceFactory(log), authAdaptor, log))
 
 	errs := make(chan error, 2)
 	go func() {

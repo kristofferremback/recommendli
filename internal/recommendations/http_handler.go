@@ -4,9 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 
 	"github.com/go-chi/chi"
 	"github.com/kristofferostlund/recommendli/pkg/logging"
+	"github.com/kristofferostlund/recommendli/pkg/sortby"
 	"github.com/kristofferostlund/recommendli/pkg/srv"
 )
 
@@ -16,6 +18,7 @@ func NewRouter(svcFactory *ServiceFactory, auth *AuthAdaptor, log logging.Logger
 
 	ar := r.With(auth.Middleware())
 	ar.Get("/v1/whoami", handler.withService(handler.whoami))
+	ar.Get("/v1/playlists", handler.withService(handler.listPlaylists))
 
 	return r
 }
@@ -46,11 +49,31 @@ func (h *httpHandler) withService(sHandler spotifyClientHandlerFunc) http.Handle
 
 func (h *httpHandler) whoami(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		usr, err := svc.spotify.CurrentUser()
+		usr, err := svc.currentUser()
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Internal server error: %s", err), 500)
 			return
 		}
 		srv.JSON(w, usr)
+	}
+}
+
+func (h *httpHandler) listPlaylists(svc *Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		usr, err := svc.currentUser()
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Internal server error: %s", err), 500)
+			return
+		}
+
+		playlists, err := svc.listPlaylists(usr)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Internal server error: %s", err), 500)
+			return
+		}
+		sort.Slice(playlists, func(i, j int) bool {
+			return sortby.PaddedNumbers(playlists[i].Name, playlists[j].Name, 10, true)
+		})
+		srv.JSON(w, playlists)
 	}
 }
