@@ -40,6 +40,8 @@ func New(optFuncs ...OptFuncs) *Paginator {
 	return p
 }
 
+// PageSize sets the paginator's page size.
+// `size` should be between 1 <= size <= 50.
 func PageSize(size int) OptFuncs {
 	return func(p *Paginator) {
 		p.pageSize = size
