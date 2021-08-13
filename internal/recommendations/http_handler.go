@@ -12,8 +12,13 @@ import (
 	"github.com/kristofferostlund/recommendli/pkg/srv"
 )
 
-func NewRouter(svcFactory *ServiceFactory, auth *AuthAdaptor, log logging.Logger) *chi.Mux {
-	handler := &httpHandler{svcFactory: svcFactory, auth: auth, log: log}
+func NewRouter(svcFactory *ServiceFactory, spotifyProviderFactory *SpotifyAdaptorFactory, auth *AuthAdaptor, log logging.Logger) *chi.Mux {
+	handler := &httpHandler{
+		svcFactory:             svcFactory,
+		spotifyProviderFactory: spotifyProviderFactory,
+		auth:                   auth,
+		log:                    log,
+	}
 	r := chi.NewRouter()
 
 	ar := r.With(auth.Middleware())
@@ -24,9 +29,10 @@ func NewRouter(svcFactory *ServiceFactory, auth *AuthAdaptor, log logging.Logger
 }
 
 type httpHandler struct {
-	svcFactory *ServiceFactory
-	auth       *AuthAdaptor
-	log        logging.Logger
+	svcFactory             *ServiceFactory
+	spotifyProviderFactory *SpotifyAdaptorFactory
+	auth                   *AuthAdaptor
+	log                    logging.Logger
 }
 
 type spotifyClientHandlerFunc func(svc *Service) http.HandlerFunc
@@ -41,13 +47,13 @@ func (h *httpHandler) withService(sHandler spotifyClientHandlerFunc) http.Handle
 			srv.InternalServerError(w)
 			return
 		}
-		sHandler(h.svcFactory.New(spotifyClient))(w, r)
+		sHandler(h.svcFactory.New(h.spotifyProviderFactory.New(spotifyClient)))(w, r)
 	}
 }
 
 func (h *httpHandler) whoami(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		usr, err := svc.currentUser(r.Context())
+		usr, err := svc.GetCurrentUser(r.Context())
 		if err != nil {
 			h.log.Error("getting current user", err)
 			srv.InternalServerError(w)
@@ -59,13 +65,7 @@ func (h *httpHandler) whoami(svc *Service) http.HandlerFunc {
 
 func (h *httpHandler) listPlaylists(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		usr, err := svc.currentUser(r.Context())
-		if err != nil {
-			h.log.Error("getting current user", err)
-			srv.InternalServerError(w)
-			return
-		}
-		playlists, err := svc.listPlaylists(r.Context(), usr)
+		playlists, err := svc.ListPlaylistsForCurrentUser(r.Context())
 		if err != nil {
 			h.log.Error("getting user's playlists", err)
 			srv.InternalServerError(w)

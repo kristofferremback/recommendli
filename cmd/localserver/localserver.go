@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/kristofferostlund/recommendli/internal/recommendations"
+	"github.com/kristofferostlund/recommendli/pkg/keyvaluestore"
 	"github.com/kristofferostlund/recommendli/pkg/logging"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -47,7 +48,12 @@ func main() {
 
 	authAdaptor := recommendations.NewSpotifyAuthAdaptor(clientID, clientSecret, *redirectURL, log)
 	r.Get(authAdaptor.Path(), authAdaptor.TokenCallbackHandler())
-	r.Mount("/recommendations", recommendations.NewRouter(recommendations.NewServiceFactory(log), authAdaptor, log))
+	r.Mount("/recommendations", recommendations.NewRouter(
+		recommendations.NewServiceFactory(log),
+		recommendations.NewSpotifyProviderFactory(log, keyvaluestore.JSONDiskStore("/Users/kristofferostlund/.recommendli")),
+		authAdaptor,
+		log,
+	))
 
 	errs := make(chan error, 2)
 	go func() {
