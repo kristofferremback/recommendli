@@ -51,7 +51,7 @@ func (s *SpotifyAdaptor) listPlaylists(ctx context.Context, usr spotify.User) ([
 		spotifypaginator.PageSize(50),
 		spotifypaginator.ProgressReporter(func(currentCount, totalCount, currentPage int) {
 			if currentPage%2 == 0 || currentCount == totalCount {
-				s.log.Info("listing playlists", "user", usr.DisplayName, "count", currentCount, "total", totalCount, "page", currentPage)
+				s.log.Debug("listing playlists", "user", usr.DisplayName, "count", currentCount, "total", totalCount, "page", currentPage)
 			}
 		}),
 	)
