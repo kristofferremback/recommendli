@@ -67,11 +67,26 @@ func (s *SpotifyAdaptor) GetPlaylist(ctx context.Context, playlistID string) (sp
 	return s.getStoredPlaylist(ctx, playlistID, "")
 }
 
+func (s *SpotifyAdaptor) PopulatePlaylists(ctx context.Context, simplePlaylists []spotify.SimplePlaylist) ([]spotify.FullPlaylist, error) {
+	if err := ctxhelper.Closed(ctx); err != nil {
+		return nil, fmt.Errorf("populating playlists: %w", err)
+	}
+	playlists := make([]spotify.FullPlaylist, 0, len(simplePlaylists))
+	for _, p := range simplePlaylists {
+		playlist, err := s.getStoredPlaylist(ctx, p.ID.String(), p.SnapshotID)
+		if err != nil {
+			return nil, err
+		}
+		playlists = append(playlists, playlist)
+	}
+	return playlists, nil
+}
+
 func (s *SpotifyAdaptor) getStoredPlaylist(ctx context.Context, playlistID, snapshotID string) (spotify.FullPlaylist, error) {
 	cacheKey := fmt.Sprintf("playlist_%s", playlistID)
 	var stored spotify.FullPlaylist
 	if exists, err := s.kv.Get(ctx, cacheKey, &stored); err == nil && exists {
-		s.log.Debug("returning stored playlist %s, snapshot ID %s matches stored value", playlistID, snapshotID)
+		s.log.Debug("returning stored playlist, snapshot ID matches stored value", "playlistID", playlistID, "snapshotID", snapshotID)
 		return stored, nil
 	} else if err != nil {
 		return spotify.FullPlaylist{}, fmt.Errorf("getting playlist %s from store: %w", playlistID, err)

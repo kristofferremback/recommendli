@@ -28,6 +28,7 @@ func NewRouter(svcFactory *ServiceFactory, spotifyProviderFactory *SpotifyAdapto
 	ar := r.With(auth.Middleware())
 	ar.Get("/v1/whoami", handler.withService(handler.whoami))
 	ar.Get("/v1/playlists", handler.withService(handler.listPlaylists))
+	ar.Get("/v1/playlists/for", handler.withService(handler.getPlaylistMatchingPattern))
 	ar.Get("/v1/playlists/{playlistID}", handler.withService(handler.getPlaylist))
 
 	return r
@@ -71,6 +72,26 @@ func (h *httpHandler) whoami(svc *Service) http.HandlerFunc {
 func (h *httpHandler) listPlaylists(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		playlists, err := svc.ListPlaylistsForCurrentUser(r.Context())
+		if err != nil {
+			h.log.Error("getting user's playlists", err)
+			srv.InternalServerError(w)
+			return
+		}
+		sort.Slice(playlists, func(i, j int) bool {
+			return sortby.PaddedNumbers(playlists[i].Name, playlists[j].Name, 10, true)
+		})
+		srv.JSON(w, playlists)
+	}
+}
+
+func (h *httpHandler) getPlaylistMatchingPattern(svc *Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		pattern := r.URL.Query().Get("pattern")
+		if pattern == "" {
+			srv.JSONError(w, errors.New("pattern must be provided"), srv.Status(400))
+			return
+		}
+		playlists, err := svc.GetCurrentUsersPlaylistMatchingPattern(r.Context(), pattern)
 		if err != nil {
 			h.log.Error("getting user's playlists", err)
 			srv.InternalServerError(w)

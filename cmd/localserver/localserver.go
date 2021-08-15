@@ -49,7 +49,7 @@ func main() {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(60 * time.Second))
+	r.Use(middleware.Timeout(50 * time.Minute))
 
 	r.Get("/status", getStatus())
 	r.Method(http.MethodGet, "/metrics", promhttp.Handler())
