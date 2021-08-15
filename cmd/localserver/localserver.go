@@ -34,7 +34,7 @@ func main() {
 	)
 	flag.Parse()
 
-	log := logging.New(logging.LevelInfo, logging.FormatConsolePretty)
+	log := logging.New(logging.LevelDebug, logging.FormatConsolePretty)
 	// nolint errcheck
 	defer log.Sync()
 

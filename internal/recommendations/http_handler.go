@@ -12,6 +12,10 @@ import (
 	"github.com/kristofferostlund/recommendli/pkg/srv"
 )
 
+const (
+	playlistIDKey = "playlistID"
+)
+
 func NewRouter(svcFactory *ServiceFactory, spotifyProviderFactory *SpotifyAdaptorFactory, auth *AuthAdaptor, log logging.Logger) *chi.Mux {
 	handler := &httpHandler{
 		svcFactory:             svcFactory,
@@ -24,6 +28,7 @@ func NewRouter(svcFactory *ServiceFactory, spotifyProviderFactory *SpotifyAdapto
 	ar := r.With(auth.Middleware())
 	ar.Get("/v1/whoami", handler.withService(handler.whoami))
 	ar.Get("/v1/playlists", handler.withService(handler.listPlaylists))
+	ar.Get("/v1/playlists/{playlistID}", handler.withService(handler.getPlaylist))
 
 	return r
 }
@@ -75,5 +80,22 @@ func (h *httpHandler) listPlaylists(svc *Service) http.HandlerFunc {
 			return sortby.PaddedNumbers(playlists[i].Name, playlists[j].Name, 10, true)
 		})
 		srv.JSON(w, playlists)
+	}
+}
+
+func (h *httpHandler) getPlaylist(svc *Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		playlistID := chi.URLParam(r, playlistIDKey)
+		if playlistID == "" {
+			srv.JSONError(w, errors.New("missing playlist ID in path"), srv.Status(400))
+			return
+		}
+		playlist, err := svc.GetPlaylist(r.Context(), playlistID)
+		if err != nil {
+			h.log.Error("getting user's playlists", err)
+			srv.InternalServerError(w)
+			return
+		}
+		srv.JSON(w, playlist)
 	}
 }

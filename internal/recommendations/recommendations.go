@@ -9,6 +9,7 @@ import (
 
 type SpotifyProvider interface {
 	ListPlaylists(ctx context.Context, usr spotify.User) ([]spotify.SimplePlaylist, error)
+	GetPlaylist(ctx context.Context, playlistID string) (spotify.FullPlaylist, error)
 	CurrentUser(ctx context.Context) (spotify.User, error)
 }
 
@@ -34,17 +35,13 @@ func (s *Service) ListPlaylistsForCurrentUser(ctx context.Context) ([]spotify.Si
 	if err != nil {
 		return nil, err
 	}
-	playlists, err := s.spotify.ListPlaylists(ctx, usr)
-	if err != nil {
-		return nil, err
-	}
-	return playlists, nil
+	return s.spotify.ListPlaylists(ctx, usr)
+}
+
+func (s *Service) GetPlaylist(ctx context.Context, playlistID string) (spotify.FullPlaylist, error) {
+	return s.spotify.GetPlaylist(ctx, playlistID)
 }
 
 func (s *Service) GetCurrentUser(ctx context.Context) (spotify.User, error) {
-	user, err := s.spotify.CurrentUser(ctx)
-	if err != nil {
-		return spotify.User{}, err
-	}
-	return user, nil
+	return s.spotify.CurrentUser(ctx)
 }

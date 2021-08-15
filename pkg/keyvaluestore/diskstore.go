@@ -16,20 +16,20 @@ func JSONDiskStore(dir string) *DiskStore {
 	return &DiskStore{dir: dir, serializer: &JSONSerializer{}}
 }
 
-func (c *DiskStore) Get(ctx context.Context, key string, out interface{}) error {
+func (c *DiskStore) Get(ctx context.Context, key string, out interface{}) (bool, error) {
 	// File doesn't exist is fine
 	if _, err := os.Stat(c.filename(key)); err != nil {
-		return nil
+		return false, nil
 	}
 	file, err := os.Open(c.filename(key))
 	if err != nil {
-		return fmt.Errorf("opening file: %w", err)
+		return false, fmt.Errorf("opening file: %w", err)
 	}
 	defer file.Close()
 	if err := c.serializer.Deserialize(file, &out); err != nil {
-		return fmt.Errorf("deserializing data: %w", err)
+		return false, fmt.Errorf("deserializing data: %w", err)
 	}
-	return nil
+	return true, nil
 }
 
 func (c *DiskStore) Put(ctx context.Context, key string, data interface{}) error {

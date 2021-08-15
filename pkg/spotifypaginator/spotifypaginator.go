@@ -27,9 +27,9 @@ type NextFunc func(currentCount, totalCount int) *NextResult
 
 type NextResult struct{ currentCount, totalCount int }
 
-type OptFuncs func(p *Paginator)
+type OptFunc func(p *Paginator)
 
-func New(optFuncs ...OptFuncs) *Paginator {
+func New(optFuncs ...OptFunc) *Paginator {
 	p := &Paginator{
 		pageSize:       50,
 		reportProgress: noopProgressReporter,
@@ -42,15 +42,29 @@ func New(optFuncs ...OptFuncs) *Paginator {
 
 // PageSize sets the paginator's page size.
 // `size` should be between 1 <= size <= 50.
-func PageSize(size int) OptFuncs {
+func PageSize(size int) OptFunc {
 	return func(p *Paginator) {
 		p.pageSize = size
 	}
 }
 
-func ProgressReporter(progressReporter ProgressReporterFunc) OptFuncs {
+func ProgressReporter(progressReporter ProgressReporterFunc) OptFunc {
 	return func(p *Paginator) {
 		p.reportProgress = progressReporter
+	}
+}
+
+type RunOpts struct {
+	offset     int
+	totalCount int
+	page       int
+}
+
+type RunOptsFunc func(r *RunOpts)
+
+func Offset(offset int) RunOptsFunc {
+	return func(r *RunOpts) {
+		r.offset = offset
 	}
 }
 
@@ -58,29 +72,36 @@ func ProgressReporter(progressReporter ProgressReporterFunc) OptFuncs {
 // or the current count matches the total count which is set by calling nextFunc(currentCount, totalCount)
 // whichever comes first.
 // The easiest way to stop the paginator without an error is to `return nil, nil`.
-func (p *Paginator) Run(ctx context.Context, paginate Func) error {
+func (p *Paginator) Run(ctx context.Context, paginate Func, runOpts ...RunOptsFunc) error {
 	var err error
 	if err = ctxhelper.Closed(ctx); err != nil {
 		return err
 	}
 
-	currentCount, totalCount := 0, math.MaxInt64
-	currentPage := 0
-	for currentCount < totalCount {
+	r := &RunOpts{
+		offset:     0,
+		totalCount: math.MaxInt64,
+		page:       0,
+	}
+	for _, rOpt := range runOpts {
+		rOpt(r)
+	}
+
+	for r.offset < r.totalCount {
 		if err = ctxhelper.Closed(ctx); err != nil {
 			return fmt.Errorf("paginating: %w", err)
 		}
 		var result *NextResult
-		result, err = paginate(&spotify.Options{Limit: &p.pageSize, Offset: &currentCount}, nextFunc)
+		result, err = paginate(&spotify.Options{Limit: &p.pageSize, Offset: &r.offset}, nextFunc)
 		if err != nil {
 			return fmt.Errorf("paginating: %w", err)
 		}
 		if result == nil {
 			return nil
 		}
-		currentPage++
-		currentCount, totalCount = result.currentCount, result.totalCount
-		p.reportProgress(currentCount, totalCount, currentPage)
+		r.page++
+		r.offset, r.totalCount = result.currentCount, result.totalCount
+		p.reportProgress(r.offset, r.totalCount, r.page)
 	}
 	return nil
 }
