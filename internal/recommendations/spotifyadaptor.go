@@ -3,6 +3,7 @@ package recommendations
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/kristofferostlund/recommendli/pkg/ctxhelper"
 	"github.com/kristofferostlund/recommendli/pkg/logging"
@@ -15,10 +16,6 @@ type KeyValueStore interface {
 	Get(ctx context.Context, key string, out interface{}) (bool, error)
 	Put(ctx context.Context, key string, data interface{}) error
 }
-
-const (
-	kvPlaylistPrefix = "playlist"
-)
 
 type SpotifyAdaptor struct {
 	spotify spotify.Client
@@ -84,10 +81,9 @@ func (s *SpotifyAdaptor) PopulatePlaylists(ctx context.Context, simplePlaylists 
 }
 
 func (s *SpotifyAdaptor) getStoredPlaylist(ctx context.Context, playlistID, snapshotID string) (spotify.FullPlaylist, error) {
-	cacheKey := fmt.Sprintf("playlist_%s", playlistID)
+	storeKey := fmt.Sprintf("playlist_%s", playlistID)
 	var stored spotify.FullPlaylist
-	if exists, err := s.kv.Get(ctx, cacheKey, &stored); err == nil && exists {
-		s.log.Debug("returning stored playlist, snapshot ID matches stored value", "playlistID", playlistID, "snapshotID", snapshotID)
+	if exists, err := s.kv.Get(ctx, storeKey, &stored); err == nil && exists && stored.SnapshotID == snapshotID {
 		return stored, nil
 	} else if err != nil {
 		return spotify.FullPlaylist{}, fmt.Errorf("getting playlist %s from store: %w", playlistID, err)
@@ -98,11 +94,16 @@ func (s *SpotifyAdaptor) getStoredPlaylist(ctx context.Context, playlistID, snap
 		return spotify.FullPlaylist{}, err
 	}
 
-	if err := s.kv.Put(ctx, cacheKey, playlist); err != nil {
+	if err := s.kv.Put(ctx, storeKey, playlist); err != nil {
 		return spotify.FullPlaylist{}, fmt.Errorf("storing playlist %s: %w", playlistID, err)
 	}
 
 	return playlist, nil
+}
+
+type indexAndTracks struct {
+	index  int
+	tracks []spotify.PlaylistTrack
 }
 
 func (s *SpotifyAdaptor) getPlaylist(ctx context.Context, playlistID string) (spotify.FullPlaylist, error) {
@@ -110,63 +111,72 @@ func (s *SpotifyAdaptor) getPlaylist(ctx context.Context, playlistID string) (sp
 	if err != nil {
 		return spotify.FullPlaylist{}, fmt.Errorf("getting playlist %s: %w", playlistID, err)
 	}
-	playlist := *p
-	if len(playlist.Tracks.Tracks) < playlist.Tracks.Total {
-		paginator := spotifypaginator.New(
-			spotifypaginator.PageSize(50),
-			spotifypaginator.InitialOffset(len(playlist.Tracks.Tracks)),
-			spotifypaginator.ProgressReporter(func(currentCount, totalCount, currentPage int) {
-				if currentPage%2 == 0 || currentCount == totalCount {
-					s.log.Debug("listing tracks for playlist", "playlist", playlist.Name, "count", currentCount, "total", totalCount, "page", currentPage)
+	if len(p.Tracks.Tracks) < p.Tracks.Total {
+		paginator := spotifypaginator.New(spotifypaginator.InitialOffset(len(p.Tracks.Tracks)), spotifypaginator.Parallelism(2))
+		itChan := make(chan indexAndTracks)
+		g, ctx := errgroup.WithContext(ctx)
+		g.Go(func() error {
+			defer close(itChan)
+			return paginator.Run(ctx, func(i int, opts *spotify.Options, next spotifypaginator.NextFunc) (result *spotifypaginator.NextResult, err error) {
+				page, err := s.spotify.GetPlaylistTracksOpt(spotify.ID(p.ID), opts, "")
+				if err != nil {
+					return nil, err
 				}
-			}),
-		)
-		if err := paginator.Run(ctx, func(opts *spotify.Options, next spotifypaginator.NextFunc) (result *spotifypaginator.NextResult, err error) {
-			page, err := s.spotify.GetPlaylistTracksOpt(spotify.ID(playlist.ID), opts, "")
-			if err != nil {
-				return nil, err
-			}
-			playlist.Tracks.Tracks = append(playlist.Tracks.Tracks, page.Tracks...)
-			return next(page.Total), nil
-		}); err != nil {
+				itChan <- indexAndTracks{i, page.Tracks}
+				return next(page.Total), nil
+			})
+		})
+		indexedTracks := make([]indexAndTracks, 0)
+		for it := range itChan {
+			indexedTracks = append(indexedTracks, it)
+		}
+		if err := g.Wait(); err != nil {
 			return spotify.FullPlaylist{}, fmt.Errorf("listing tracks: %w", err)
 		}
+		sort.Slice(indexedTracks, func(i, j int) bool {
+			return indexedTracks[i].index < indexedTracks[j].index
+		})
+		for _, it := range indexedTracks {
+			p.Tracks.Tracks = append(p.Tracks.Tracks, it.tracks...)
+		}
 	}
-	return playlist, nil
+	return *p, nil
+}
+
+type indexAndPlaylists struct {
+	index     int
+	playlists []spotify.SimplePlaylist
 }
 
 func (s *SpotifyAdaptor) listPlaylists(ctx context.Context, usr spotify.User) ([]spotify.SimplePlaylist, error) {
-	playlists := make([]spotify.SimplePlaylist, 0)
-	paginator := spotifypaginator.New(
-		spotifypaginator.PageSize(50),
-		spotifypaginator.ProgressReporter(func(currentCount, totalCount, currentPage int) {
-			if currentPage%2 == 0 || currentCount == totalCount {
-				s.log.Debug("listing playlists", "user", usr.DisplayName, "count", currentCount, "total", totalCount, "page", currentPage)
-			}
-		}),
-	)
-	playlistsChan := make(chan []spotify.SimplePlaylist)
-	eg, ctx := errgroup.WithContext(ctx)
-	eg.Go(func() error {
-		defer close(playlistsChan)
-		return paginator.RunAsync(ctx, func(opts *spotify.Options, next spotifypaginator.NextFunc) (*spotifypaginator.NextResult, error) {
-			fmt.Println("offset", *opts.Offset)
-			r, err := s.spotify.GetPlaylistsForUserOpt(usr.ID, opts)
+	paginator := spotifypaginator.New(spotifypaginator.Parallelism(10))
+	ipChan := make(chan indexAndPlaylists)
+	g, ctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		defer close(ipChan)
+		return paginator.Run(ctx, func(i int, opts *spotify.Options, next spotifypaginator.NextFunc) (*spotifypaginator.NextResult, error) {
+			page, err := s.spotify.GetPlaylistsForUserOpt(usr.ID, opts)
 			if err != nil {
 				return nil, err
 			}
-			playlistsChan <- r.Playlists
-			fmt.Println(r.Endpoint, "offset", r.Offset, "next", r.Next)
-			return next(r.Total), nil
+			fmt.Println(page.Endpoint, page.Next)
+			ipChan <- indexAndPlaylists{i, page.Playlists}
+			return next(page.Total), nil
 		})
 	})
-
-	for pls := range playlistsChan {
-		playlists = append(playlists, pls...)
+	indexedPlaylists := make([]indexAndPlaylists, 0)
+	for ip := range ipChan {
+		indexedPlaylists = append(indexedPlaylists, ip)
 	}
-
-	if err := eg.Wait(); err != nil {
+	if err := g.Wait(); err != nil {
 		return nil, err
+	}
+	sort.Slice(indexedPlaylists, func(i, j int) bool {
+		return indexedPlaylists[i].index < indexedPlaylists[j].index
+	})
+	playlists := make([]spotify.SimplePlaylist, 0)
+	for _, indexed := range indexedPlaylists {
+		playlists = append(playlists, indexed.playlists...)
 	}
 
 	return playlists, nil
