@@ -113,6 +113,7 @@ func (s *SpotifyAdaptor) getPlaylist(ctx context.Context, playlistID string) (sp
 	if len(playlist.Tracks.Tracks) < playlist.Tracks.Total {
 		paginator := spotifypaginator.New(
 			spotifypaginator.PageSize(50),
+			spotifypaginator.InitialOffset(len(playlist.Tracks.Tracks)),
 			spotifypaginator.ProgressReporter(func(currentCount, totalCount, currentPage int) {
 				if currentPage%2 == 0 || currentCount == totalCount {
 					s.log.Debug("listing tracks for playlist", "playlist", playlist.Name, "count", currentCount, "total", totalCount, "page", currentPage)
@@ -125,8 +126,8 @@ func (s *SpotifyAdaptor) getPlaylist(ctx context.Context, playlistID string) (sp
 				return nil, err
 			}
 			playlist.Tracks.Tracks = append(playlist.Tracks.Tracks, page.Tracks...)
-			return next(len(playlist.Tracks.Tracks), page.Total), nil
-		}, spotifypaginator.Offset(len(playlist.Tracks.Tracks))); err != nil {
+			return next(page.Total), nil
+		}); err != nil {
 			return spotify.FullPlaylist{}, fmt.Errorf("listing tracks: %w", err)
 		}
 	}
@@ -149,7 +150,7 @@ func (s *SpotifyAdaptor) listPlaylists(ctx context.Context, usr spotify.User) ([
 			return nil, err
 		}
 		playlists = append(playlists, r.Playlists...)
-		return next(len(playlists), r.Total), nil
+		return next(r.Total), nil
 	}); err != nil {
 		return nil, err
 	}
