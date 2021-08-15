@@ -8,6 +8,7 @@ import (
 	"github.com/kristofferostlund/recommendli/pkg/logging"
 	"github.com/kristofferostlund/recommendli/pkg/spotifypaginator"
 	"github.com/zmb3/spotify"
+	"golang.org/x/sync/errgroup"
 )
 
 type KeyValueStore interface {
@@ -144,15 +145,29 @@ func (s *SpotifyAdaptor) listPlaylists(ctx context.Context, usr spotify.User) ([
 			}
 		}),
 	)
-	if err := paginator.Run(ctx, func(opts *spotify.Options, next spotifypaginator.NextFunc) (*spotifypaginator.NextResult, error) {
-		r, err := s.spotify.GetPlaylistsForUserOpt(usr.ID, opts)
-		if err != nil {
-			return nil, err
-		}
-		playlists = append(playlists, r.Playlists...)
-		return next(r.Total), nil
-	}); err != nil {
+	playlistsChan := make(chan []spotify.SimplePlaylist)
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
+		defer close(playlistsChan)
+		return paginator.RunAsync(ctx, func(opts *spotify.Options, next spotifypaginator.NextFunc) (*spotifypaginator.NextResult, error) {
+			fmt.Println("offset", *opts.Offset)
+			r, err := s.spotify.GetPlaylistsForUserOpt(usr.ID, opts)
+			if err != nil {
+				return nil, err
+			}
+			playlistsChan <- r.Playlists
+			fmt.Println(r.Endpoint, "offset", r.Offset, "next", r.Next)
+			return next(r.Total), nil
+		})
+	})
+
+	for pls := range playlistsChan {
+		playlists = append(playlists, pls...)
+	}
+
+	if err := eg.Wait(); err != nil {
 		return nil, err
 	}
+
 	return playlists, nil
 }
