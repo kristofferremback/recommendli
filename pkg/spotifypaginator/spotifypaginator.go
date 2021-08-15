@@ -46,7 +46,7 @@ func New(optFuncs ...OptFunc) *Paginator {
 		pageSize:         50,
 		reportProgress:   noopProgressReporter,
 		initialOffset:    0,
-		concurrencyLimit: 1,
+		concurrencyLimit: 5,
 	}
 	for _, optFunc := range optFuncs {
 		optFunc(p)
@@ -65,6 +65,12 @@ func PageSize(size int) OptFunc {
 func ProgressReporter(progressReporter ProgressReporterFunc) OptFunc {
 	return func(p *Paginator) {
 		p.reportProgress = progressReporter
+	}
+}
+
+func Concurrency(concurrencyLimit int) OptFunc {
+	return func(p *Paginator) {
+		p.concurrencyLimit = concurrencyLimit
 	}
 }
 
@@ -156,27 +162,29 @@ func (p *Paginator) RunAsync(ctx context.Context, paginate Func) error {
 		return nil
 	}
 
-	optsChan := make(chan pOpts, p.concurrencyLimit)
-	go func() {
-		defer close(optsChan)
-		counter := 0
-		for offset := rs.offset; offset < rs.totalCount; offset += p.pageSize {
-			optsChan <- pOpts{
-				runState: runState{offset: offset, totalCount: rs.totalCount, page: rs.page + counter},
-				pageSize: p.pageSize,
-			}
-		}
-	}()
+	popts := make([]pOpts, 0)
+	counter := 0
+
+	for offset := rs.offset; offset < rs.totalCount; offset += p.pageSize {
+		popts = append(popts, pOpts{
+			runState: runState{offset: offset, totalCount: rs.totalCount, page: rs.page + counter},
+			pageSize: p.pageSize,
+		})
+	}
 
 	errStopped := errors.New("stopped")
-
-	g, ctx := errgroup.WithContext(ctx)
-	for opts := range optsChan {
-		if err := ctxhelper.Closed(ctx); err != nil {
-			return err
-		}
-		spotifyOpts, rs := opts.spotify(), opts.runState
-		g.Go(func() error {
+	eg, ctx := errgroup.WithContext(ctx)
+	guard := make(chan struct{}, p.concurrencyLimit)
+	for _, o := range popts {
+		guard <- struct{}{}
+		spotifyOpts, rs := o.spotify(), o.runState
+		eg.Go(func() error {
+			defer func() {
+				<-guard
+			}()
+			if err := ctxhelper.Closed(ctx); err != nil {
+				return err
+			}
 			result, err := paginate(spotifyOpts, nextFunc)
 			if err != nil {
 				return err
@@ -188,13 +196,50 @@ func (p *Paginator) RunAsync(ctx context.Context, paginate Func) error {
 			return nil
 		})
 	}
-
-	err = g.Wait()
-	if err != nil && !errors.Is(err, errStopped) {
+	close(guard)
+	if err := eg.Wait(); err != nil && !errors.Is(err, errStopped) {
 		return err
 	}
 
 	return nil
+
+	// optsChan := make(chan pOpts, p.concurrencyLimit)
+
+	// errStopped := errors.New("stopped")
+	// g, ctx := errgroup.WithContext(ctx)
+	// g.Go(func() error {
+	// 	for opts := range optsChan {
+	// 		if err := ctxhelper.Closed(ctx); err != nil {
+	// 			return err
+	// 		}
+	// 		spotifyOpts, rs := opts.spotify(), opts.runState
+	// 		result, err := paginate(spotifyOpts, nextFunc)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 		if result == nil || result.stop {
+	// 			return errStopped
+	// 		}
+	// 		p.reportProgress(rs.offset, rs.totalCount, rs.page)
+	// 	}
+	// 	return nil
+	// })
+
+	// counter2 := 0
+	// for offset := rs.offset; offset < rs.totalCount; offset += p.pageSize {
+	// 	optsChan <- pOpts{
+	// 		runState: runState{offset: offset, totalCount: rs.totalCount, page: rs.page + counter2},
+	// 		pageSize: p.pageSize,
+	// 	}
+	// }
+	// close(optsChan)
+
+	// err = g.Wait()
+	// if err != nil && !errors.Is(err, errStopped) {
+	// 	return err
+	// }
+
+	// return nil
 }
 
 func nextFunc(totalCount int) *NextResult {
