@@ -159,7 +159,6 @@ func (s *SpotifyAdaptor) listPlaylists(ctx context.Context, usr spotify.User) ([
 			if err != nil {
 				return nil, err
 			}
-			fmt.Println(page.Endpoint, page.Next)
 			ipChan <- indexAndPlaylists{i, page.Playlists}
 			return next(page.Total), nil
 		})
