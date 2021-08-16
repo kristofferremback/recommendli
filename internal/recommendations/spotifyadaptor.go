@@ -9,11 +9,6 @@ import (
 	"github.com/zmb3/spotify"
 )
 
-type KeyValueStore interface {
-	Get(ctx context.Context, key string, out interface{}) (bool, error)
-	Put(ctx context.Context, key string, data interface{}) error
-}
-
 type SpotifyAdaptor struct {
 	spotify spotify.Client
 	log     logging.Logger
@@ -42,4 +37,15 @@ func (s *SpotifyAdaptor) CurrentUser(ctx context.Context) (spotify.User, error) 
 		return spotify.User{}, fmt.Errorf("getting current user: %w", err)
 	}
 	return usr.User, nil
+}
+
+func (s *SpotifyAdaptor) CurrentTrack(ctx context.Context) (spotify.FullTrack, bool, error) {
+	p, err := s.spotify.PlayerCurrentlyPlaying()
+	if err != nil {
+		return spotify.FullTrack{}, false, fmt.Errorf("getting currently playing track: %w", err)
+	}
+	if !p.Playing {
+		return spotify.FullTrack{}, false, nil
+	}
+	return *p.Item, true, nil
 }

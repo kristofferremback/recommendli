@@ -10,6 +10,7 @@ import (
 	"github.com/kristofferostlund/recommendli/pkg/logging"
 	"github.com/kristofferostlund/recommendli/pkg/sortby"
 	"github.com/kristofferostlund/recommendli/pkg/srv"
+	"github.com/zmb3/spotify"
 )
 
 const (
@@ -27,6 +28,7 @@ func NewRouter(svcFactory *ServiceFactory, spotifyProviderFactory *SpotifyAdapto
 
 	ar := r.With(auth.Middleware())
 	ar.Get("/v1/whoami", handler.withService(handler.whoami))
+	ar.Get("/v1/check-current-track-in-library", handler.withService(handler.checkCurrentTrackInLibrary))
 	ar.Get("/v1/playlists", handler.withService(handler.listPlaylists))
 	ar.Get("/v1/playlists/for", handler.withService(handler.getPlaylistMatchingPattern))
 	ar.Get("/v1/playlists/{playlistID}", handler.withService(handler.getPlaylist))
@@ -118,5 +120,25 @@ func (h *httpHandler) getPlaylist(svc *Service) http.HandlerFunc {
 			return
 		}
 		srv.JSON(w, playlist)
+	}
+}
+
+func (h *httpHandler) checkCurrentTrackInLibrary(svc *Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		currentTrack, playlists, err := svc.CheckPlayingTrackInLibrary(r.Context())
+		if err != nil && errors.As(err, &ErrNoCurrentTrack{}) {
+			h.log.Error("user not listening to spotify", err)
+			srv.JSONError(w, err, srv.Status(400))
+			return
+		} else if err != nil {
+			h.log.Error("checking current track in library", err)
+			srv.InternalServerError(w)
+			return
+		}
+		srv.JSON(w, struct {
+			InLibrary bool                     `json:"in_library"`
+			Track     spotify.FullTrack        `json:"track"`
+			Playlists []spotify.SimplePlaylist `json:"playlists"`
+		}{Track: currentTrack, Playlists: playlists, InLibrary: len(playlists) > 0})
 	}
 }
