@@ -51,12 +51,17 @@ func (s *Service) GetCurrentUsersPlaylistMatchingPattern(ctx context.Context, pa
 	if err != nil {
 		return nil, err
 	}
+
 	matching := make([]spotify.SimplePlaylist, 0)
 	for _, p := range playlists {
 		if re.MatchString(p.Name) {
 			matching = append(matching, p)
 		}
 	}
+	if len(matching) == 0 {
+		return nil, nil
+	}
+
 	return s.spotify.PopulatePlaylists(ctx, matching)
 }
 

@@ -111,6 +111,7 @@ func (s *SpotifyAdaptor) getPlaylist(ctx context.Context, playlistID string) (sp
 	if err != nil {
 		return spotify.FullPlaylist{}, fmt.Errorf("getting playlist %s: %w", playlistID, err)
 	}
+
 	if len(p.Tracks.Tracks) < p.Tracks.Total {
 		paginator := spotifypaginator.New(spotifypaginator.InitialOffset(len(p.Tracks.Tracks)), spotifypaginator.Parallelism(2))
 		itChan := make(chan indexAndTracks)
@@ -126,6 +127,7 @@ func (s *SpotifyAdaptor) getPlaylist(ctx context.Context, playlistID string) (sp
 				return next(page.Total), nil
 			})
 		})
+
 		indexedTracks := make([]indexAndTracks, 0)
 		for it := range itChan {
 			indexedTracks = append(indexedTracks, it)
@@ -136,6 +138,7 @@ func (s *SpotifyAdaptor) getPlaylist(ctx context.Context, playlistID string) (sp
 		sort.Slice(indexedTracks, func(i, j int) bool {
 			return indexedTracks[i].index < indexedTracks[j].index
 		})
+
 		for _, it := range indexedTracks {
 			p.Tracks.Tracks = append(p.Tracks.Tracks, it.tracks...)
 		}
@@ -163,6 +166,7 @@ func (s *SpotifyAdaptor) listPlaylists(ctx context.Context, usr spotify.User) ([
 			return next(page.Total), nil
 		})
 	})
+
 	indexedPlaylists := make([]indexAndPlaylists, 0)
 	for ip := range ipChan {
 		indexedPlaylists = append(indexedPlaylists, ip)
@@ -173,6 +177,7 @@ func (s *SpotifyAdaptor) listPlaylists(ctx context.Context, usr spotify.User) ([
 	sort.Slice(indexedPlaylists, func(i, j int) bool {
 		return indexedPlaylists[i].index < indexedPlaylists[j].index
 	})
+
 	playlists := make([]spotify.SimplePlaylist, 0)
 	for _, indexed := range indexedPlaylists {
 		playlists = append(playlists, indexed.playlists...)
