@@ -49,7 +49,7 @@ func JSON(w http.ResponseWriter, data interface{}, opts ...ResponseOptFunc) {
 }
 
 func JSONError(w http.ResponseWriter, err error, opts ...ResponseOptFunc) {
-	JSON(w, map[string]error{"error": err}, opts...)
+	JSON(w, map[string]string{"error": err.Error()}, opts...)
 }
 
 func respond(w http.ResponseWriter, body []byte, opts ...ResponseOptFunc) {
