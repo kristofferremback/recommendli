@@ -154,7 +154,9 @@ func (a *AuthAdaptor) GetClient(r *http.Request) (spotify.Client, error) {
 	if !ok {
 		return spotify.Client{}, NoAuthenticationError
 	}
-	return a.authenticator.NewClient(token), nil
+	client := a.authenticator.NewClient(token)
+	client.AutoRetry = true
+	return client, nil
 }
 
 func (a *AuthAdaptor) redirect(w http.ResponseWriter, r *http.Request) {
