@@ -29,6 +29,8 @@ func NewRouter(svcFactory *ServiceFactory, spotifyProviderFactory *SpotifyAdapto
 	ar := r.With(auth.Middleware())
 	ar.Get("/v1/whoami", handler.withService(handler.whoami))
 	ar.Get("/v1/check-current-track-in-library", handler.withService(handler.checkCurrentTrackInLibrary))
+	ar.Get("/v1/generate-discovery-playlist", handler.withService(handler.generateDiscoveryPlaylist))
+	ar.Get("/v1/album-for-current-track", handler.withService(handler.getAlbumForCurrentTrack))
 	ar.Get("/v1/playlists", handler.withService(handler.listPlaylists))
 	ar.Get("/v1/playlists/for", handler.withService(handler.getPlaylistMatchingPattern))
 	ar.Get("/v1/playlists/{playlistID}", handler.withService(handler.getPlaylist))
@@ -140,5 +142,33 @@ func (h *httpHandler) checkCurrentTrackInLibrary(svc *Service) http.HandlerFunc 
 			Track     spotify.FullTrack        `json:"track"`
 			Playlists []spotify.SimplePlaylist `json:"playlists"`
 		}{Track: currentTrack, Playlists: playlists, InLibrary: len(playlists) > 0})
+	}
+}
+
+func (h *httpHandler) generateDiscoveryPlaylist(svc *Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		playlist, err := svc.GenerateDiscoveryPlaylist(r.Context())
+		if err != nil {
+			h.log.Error("generating discovery playlist", err)
+			srv.InternalServerError(w)
+			return
+		}
+		srv.JSON(w, playlist)
+	}
+}
+
+func (h *httpHandler) getAlbumForCurrentTrack(svc *Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		album, err := svc.GetCurrentlyPlayingTrackAlbum(r.Context())
+		if err != nil && errors.As(err, &ErrNoCurrentTrack{}) {
+			h.log.Error("user not listening to spotify", err)
+			srv.JSONError(w, err, srv.Status(400))
+			return
+		} else if err != nil {
+			h.log.Error("getting current track's album", err)
+			srv.InternalServerError(w)
+			return
+		}
+		srv.JSON(w, album)
 	}
 }

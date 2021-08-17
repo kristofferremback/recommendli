@@ -5,8 +5,27 @@ import (
 	"regexp"
 )
 
-type DummyUserPreferenceProvider struct{}
+type DummyUserPreferenceProvider struct {
+	prefs UserPreferences
+}
 
-func (d *DummyUserPreferenceProvider) GetLibraryPattern(ctx context.Context, userID string) (*regexp.Regexp, error) {
-	return regexp.Compile(`^Metal \d+`)
+func NewDummyUserPreferenceProvider() *DummyUserPreferenceProvider {
+	return &DummyUserPreferenceProvider{
+		prefs: UserPreferences{
+			LibraryPattern:         regexp.MustCompile(`^Metal \d+`),
+			DiscoveryPlaylistNames: []string{"Release Radar", "Discover Weekly"},
+			PenaltyWords: map[string]int{
+				"instrumental": -50,
+				"acoustic":     -30,
+				"re-imagined":  -30,
+				"remix":        -30,
+			},
+			MinimumAlbumSize:                 3,
+			RecommendationPlaylistNamePrefix: "recommendli",
+		},
+	}
+}
+
+func (d *DummyUserPreferenceProvider) GetPreferences(ctx context.Context, userID string) (UserPreferences, error) {
+	return d.prefs, nil
 }

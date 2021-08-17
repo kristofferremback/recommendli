@@ -4,16 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 
 	"github.com/kristofferostlund/recommendli/pkg/ctxhelper"
 	"github.com/zmb3/spotify"
 	"golang.org/x/sync/errgroup"
 )
 
+// TODO: Convert this into a generic Paginator instead of tying it to *spotify.Options
 type Paginator struct {
-	pageSize      int
-	initialOffset int
-	parallelism   int
+	pageSize          int
+	initialOffset     int
+	initialTotalCount int
+	parallelism       int
 }
 
 // Func is called with the current page's *spotify.Options and PaginatorNextFunc.
@@ -31,9 +34,10 @@ type OptFunc func(p *Paginator)
 
 func New(optFuncs ...OptFunc) *Paginator {
 	p := &Paginator{
-		pageSize:      50,
-		initialOffset: 0,
-		parallelism:   3,
+		pageSize:          50,
+		initialOffset:     0,
+		initialTotalCount: math.MaxInt64,
+		parallelism:       3,
 	}
 	for _, optFunc := range optFuncs {
 		optFunc(p)
@@ -47,9 +51,21 @@ func Parallelism(parallelism int) OptFunc {
 	}
 }
 
+func PageSize(pageSize int) OptFunc {
+	return func(p *Paginator) {
+		p.pageSize = pageSize
+	}
+}
+
 func InitialOffset(offset int) OptFunc {
 	return func(p *Paginator) {
 		p.initialOffset = offset
+	}
+}
+
+func InitialTotalCount(totalCount int) OptFunc {
+	return func(p *Paginator) {
+		p.initialTotalCount = totalCount
 	}
 }
 
@@ -73,7 +89,7 @@ func (p *Paginator) run(ctx context.Context, paginate Func, parallelism int) err
 	}
 
 	// run initially once to get the total count before we start the parallel iteration
-	result, err := paginate(0, p.spotifyOpts(0), nextFunc)
+	result, err := paginate(0, p.spotifyOpts(0, p.initialTotalCount), nextFunc)
 	if err != nil {
 		return fmt.Errorf("paginating: %w", err)
 	}
@@ -84,7 +100,7 @@ func (p *Paginator) run(ctx context.Context, paginate Func, parallelism int) err
 	totalCount := result.totalCount
 	g, ctx := errgroup.WithContext(ctx)
 	guard := make(chan struct{}, parallelism)
-	for i := 1; *p.spotifyOpts(i).Offset < totalCount; i++ {
+	for i := 1; *p.spotifyOpts(i, totalCount).Offset < totalCount; i++ {
 		guard <- struct{}{}
 		index := i
 		g.Go(func() error {
@@ -94,7 +110,7 @@ func (p *Paginator) run(ctx context.Context, paginate Func, parallelism int) err
 			if err := ctxhelper.Closed(ctx); err != nil {
 				return err
 			}
-			result, err := paginate(index, p.spotifyOpts(index), nextFunc)
+			result, err := paginate(index, p.spotifyOpts(index, totalCount), nextFunc)
 			if err != nil {
 				return err
 			}
@@ -111,9 +127,13 @@ func (p *Paginator) run(ctx context.Context, paginate Func, parallelism int) err
 	return nil
 }
 
-func (p *Paginator) spotifyOpts(i int) *spotify.Options {
+func (p *Paginator) spotifyOpts(i, max int) *spotify.Options {
 	offset := p.initialOffset + i*p.pageSize
-	return &spotify.Options{Offset: &offset, Limit: &p.pageSize}
+	limit := p.pageSize
+	if offset+limit > max {
+		limit = max - offset
+	}
+	return &spotify.Options{Offset: &offset, Limit: &limit}
 }
 
 func nextFunc(totalCount int) *NextResult {

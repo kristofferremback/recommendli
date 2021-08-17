@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"sort"
+	"strings"
+	"time"
 
 	"github.com/kristofferostlund/recommendli/pkg/logging"
 	"github.com/zmb3/spotify"
@@ -18,12 +21,37 @@ type SpotifyProvider interface {
 	ListPlaylists(ctx context.Context, userID string) ([]spotify.SimplePlaylist, error)
 	GetPlaylist(ctx context.Context, playlistID string) (spotify.FullPlaylist, error)
 	PopulatePlaylists(ctx context.Context, simplePlaylists []spotify.SimplePlaylist) ([]spotify.FullPlaylist, error)
+	CreatePlaylist(ctx context.Context, userID, name string, trackIDs []string) (spotify.FullPlaylist, error)
 	CurrentUser(ctx context.Context) (spotify.User, error)
 	CurrentTrack(ctx context.Context) (spotify.FullTrack, bool, error)
+	GetAlbum(ctx context.Context, albumID string) (spotify.FullAlbum, error)
+	GetAlbums(ctx context.Context, albumIDs []string) ([]spotify.FullAlbum, error)
+	ListArtistAlbums(ctx context.Context, artistID string) ([]spotify.SimpleAlbum, error)
+	GetTrack(ctx context.Context, trackID string) (spotify.FullTrack, error)
 }
 
 type UserPreferenceProvider interface {
-	GetLibraryPattern(ctx context.Context, userID string) (*regexp.Regexp, error)
+	GetPreferences(ctx context.Context, userID string) (UserPreferences, error)
+}
+
+type UserPreferences struct {
+	LibraryPattern                   *regexp.Regexp
+	DiscoveryPlaylistNames           []string
+	PenaltyWords                     map[string]int
+	MinimumAlbumSize                 int
+	RecommendationPlaylistNamePrefix string
+}
+
+func (u UserPreferences) IsDiscoveryPlaylistName(name string) bool {
+	return stringsContain(u.DiscoveryPlaylistNames, name)
+}
+
+func (u UserPreferences) IsLibraryPlaylistName(name string) bool {
+	return !u.IsDiscoveryPlaylistName(name) && u.LibraryPattern.MatchString(name)
+}
+
+func (u UserPreferences) RecommendationPlaylistName(kind string, now time.Time) string {
+	return fmt.Sprintf("%s %s %s", u.RecommendationPlaylistNamePrefix, kind, now.Format("2006-01-02"))
 }
 
 type ServiceFactory struct {
@@ -47,6 +75,25 @@ type Service struct {
 	spotify         SpotifyProvider
 }
 
+type score struct {
+	track spotify.FullTrack
+	album spotify.FullAlbum
+}
+
+func (s score) keep(prefs UserPreferences) bool {
+	return len(s.album.Tracks.Tracks) >= prefs.MinimumAlbumSize
+}
+
+func (s score) calculate(prefs UserPreferences) int {
+	value := 0
+	for word, penalty := range prefs.PenaltyWords {
+		if strings.Contains(strings.ToLower(s.track.Name), strings.ToLower(word)) {
+			value += penalty
+		}
+	}
+	return value + s.album.ReleaseDateTime().Year() - 2000
+}
+
 func (s *Service) ListPlaylistsForCurrentUser(ctx context.Context) ([]spotify.SimplePlaylist, error) {
 	usr, err := s.GetCurrentUser(ctx)
 	if err != nil {
@@ -66,7 +113,9 @@ func (s *Service) GetCurrentUsersPlaylistMatchingPattern(ctx context.Context, pa
 		return nil, err
 	}
 
-	matching := filterMatchingNames(re, playlists)
+	matching := filterSimplePlaylist(playlists, func(p spotify.SimplePlaylist) bool {
+		return re.MatchString(p.Name)
+	})
 	if len(matching) == 0 {
 		return nil, nil
 	}
@@ -90,6 +139,22 @@ func (err ErrNoCurrentTrack) Error() string {
 	return fmt.Sprintf("user %s must listen to music", err.usr.DisplayName)
 }
 
+func (s *Service) GetCurrentlyPlayingTrackAlbum(ctx context.Context) (spotify.FullAlbum, error) {
+	usr, err := s.GetCurrentUser(ctx)
+	if err != nil {
+		return spotify.FullAlbum{}, err
+	}
+
+	currentTrack, isPlaying, err := s.spotify.CurrentTrack(ctx)
+	if err != nil {
+		return spotify.FullAlbum{}, fmt.Errorf("checking track current user is playing: %w", err)
+	} else if !isPlaying {
+		return spotify.FullAlbum{}, ErrNoCurrentTrack{usr: usr}
+	}
+
+	return s.albumForTrack(ctx, currentTrack)
+}
+
 func (s *Service) CheckPlayingTrackInLibrary(ctx context.Context) (spotify.FullTrack, []spotify.SimplePlaylist, error) {
 	usr, err := s.GetCurrentUser(ctx)
 	if err != nil {
@@ -99,8 +164,7 @@ func (s *Service) CheckPlayingTrackInLibrary(ctx context.Context) (spotify.FullT
 	currentTrack, isPlaying, err := s.spotify.CurrentTrack(ctx)
 	if err != nil {
 		return spotify.FullTrack{}, nil, fmt.Errorf("checking track current user is playing: %w", err)
-	}
-	if !isPlaying {
+	} else if !isPlaying {
 		return spotify.FullTrack{}, nil, ErrNoCurrentTrack{usr: usr}
 	}
 
@@ -108,15 +172,17 @@ func (s *Service) CheckPlayingTrackInLibrary(ctx context.Context) (spotify.FullT
 	if err != nil {
 		return spotify.FullTrack{}, nil, fmt.Errorf("listing user playlists checking if track is in library: %w", err)
 	}
-	re, err := s.userPreferences.GetLibraryPattern(ctx, usr.ID)
+	prefs, err := s.userPreferences.GetPreferences(ctx, usr.ID)
 	if err != nil {
-		return spotify.FullTrack{}, nil, fmt.Errorf("checking if track is in library: %w", err)
+		return spotify.FullTrack{}, nil, fmt.Errorf("getting user prefences: %w", err)
 	}
-	libraryPlaylists := filterMatchingNames(re, playlists)
+	libraryPlaylists := filterSimplePlaylist(playlists, func(p spotify.SimplePlaylist) bool {
+		return prefs.IsLibraryPlaylistName(p.Name)
+	})
 
 	indexedLibrary, err := s.getStoredTrackPlaylistIndex(ctx, usr, libraryPlaylists)
 	if err != nil {
-		return spotify.FullTrack{}, nil, fmt.Errorf("populating base playlists when checking if track is in library: %w", err)
+		return spotify.FullTrack{}, nil, fmt.Errorf("populating library playlists when checking if track is in library: %w", err)
 	}
 
 	s.log.Info("tracks fully listed", "unique song count", len(indexedLibrary.Tracks), "playlist count", len(indexedLibrary.Playlists))
@@ -126,10 +192,61 @@ func (s *Service) CheckPlayingTrackInLibrary(ctx context.Context) (spotify.FullT
 		for _, p := range pls {
 			playlistNames = append(playlistNames, p.Name)
 		}
-		s.log.Info("current track already in library", "track", indexedLibrary.Key(currentTrack), "playlists", playlistNames)
+		s.log.Info("current track already in library", "track", stringifyTrack(currentTrack), "playlists", playlistNames)
 		return currentTrack, pls, nil
 	}
 
-	s.log.Info("current track is new", "track", indexedLibrary.Key(currentTrack))
+	s.log.Info("current track is new", "track", stringifyTrack(currentTrack))
 	return currentTrack, nil, nil
+}
+
+func (s *Service) GenerateDiscoveryPlaylist(ctx context.Context) (spotify.FullPlaylist, error) {
+	usr, err := s.GetCurrentUser(ctx)
+	if err != nil {
+		return spotify.FullPlaylist{}, err
+	}
+
+	playlists, err := s.spotify.ListPlaylists(ctx, usr.ID)
+	if err != nil {
+		return spotify.FullPlaylist{}, fmt.Errorf("listing user playlists generating discovery playlist: %w", err)
+	}
+	prefs, err := s.userPreferences.GetPreferences(ctx, usr.ID)
+	if err != nil {
+		return spotify.FullPlaylist{}, fmt.Errorf("getting user prefences: %w", err)
+	}
+
+	discoveryPlaylists := filterSimplePlaylist(playlists, func(p spotify.SimplePlaylist) bool {
+		return prefs.IsDiscoveryPlaylistName(p.Name)
+	})
+	libraryPlaylists := filterSimplePlaylist(playlists, func(p spotify.SimplePlaylist) bool {
+		return prefs.IsLibraryPlaylistName(p.Name)
+	})
+
+	indexedLibrary, err := s.getStoredTrackPlaylistIndex(ctx, usr, libraryPlaylists)
+	if err != nil {
+		return spotify.FullPlaylist{}, fmt.Errorf("populating library playlists when generating discovery playlist: %w", err)
+	}
+
+	populatedDiscovery, err := s.spotify.PopulatePlaylists(ctx, discoveryPlaylists)
+	if err != nil {
+		return spotify.FullPlaylist{}, fmt.Errorf("populating discovery playlists when generating discovery playlist: %w", err)
+	}
+	scores, err := s.scoreTracks(ctx, filterTracks(uniqueTracks(tracksFor(populatedDiscovery)), indexedLibrary.Has))
+	if err != nil {
+		return spotify.FullPlaylist{}, fmt.Errorf("getting most relevant versions of tracks when generating discovery playlist: %w", err)
+	}
+
+	sort.SliceStable(scores, func(i, j int) bool {
+		return scores[i].calculate(prefs) < scores[j].calculate(prefs)
+	})
+	trackIDs := make([]string, 0)
+	for _, s := range scores {
+		if s.keep(prefs) {
+			trackIDs = append(trackIDs, s.track.ID.String())
+		}
+	}
+
+	playlistName := prefs.RecommendationPlaylistName("discovery", time.Now())
+	// TODO: Truncate and update the playlist if it already exists
+	return s.spotify.CreatePlaylist(ctx, usr.ID, playlistName, trackIDs)
 }

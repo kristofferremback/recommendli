@@ -3,9 +3,12 @@ package recommendations
 import (
 	"context"
 	"fmt"
-	"regexp"
+	"sort"
+	"strings"
 
+	"github.com/kristofferostlund/recommendli/pkg/spotifypaginator"
 	"github.com/zmb3/spotify"
+	"golang.org/x/sync/errgroup"
 )
 
 func (s *Service) getStoredTrackPlaylistIndex(ctx context.Context, usr spotify.User, simplePlaylists []spotify.SimplePlaylist) (*TrackPlaylistIndex, error) {
@@ -35,12 +38,186 @@ func (s *Service) getStoredTrackPlaylistIndex(ctx context.Context, usr spotify.U
 	return index, nil
 }
 
-func filterMatchingNames(re *regexp.Regexp, playlists []spotify.SimplePlaylist) []spotify.SimplePlaylist {
-	libraryPlaylists := make([]spotify.SimplePlaylist, 0)
-	for _, p := range playlists {
-		if re.MatchString(p.Name) {
-			libraryPlaylists = append(libraryPlaylists, p)
+func (s *Service) albumForTrack(ctx context.Context, track spotify.FullTrack) (spotify.FullAlbum, error) {
+	album, err := s.spotify.GetAlbum(ctx, track.Album.ID.String())
+	if err != nil {
+		return spotify.FullAlbum{}, fmt.Errorf("getting album for track %s: %w", track.ID, err)
+	}
+	if album.AlbumType == "album" {
+		return album, nil
+	}
+
+	artistIndex := make(map[string]int)
+	for i, artist := range track.Artists {
+		artistIndex[artist.ID.String()] = i
+	}
+
+	simpleAlbums := make([]spotify.SimpleAlbum, 0)
+	for _, artist := range track.Artists {
+		sa, err := s.spotify.ListArtistAlbums(ctx, artist.ID.String())
+		if err != nil {
+			return spotify.FullAlbum{}, err
+		}
+		simpleAlbums = append(simpleAlbums, sa...)
+	}
+	if len(simpleAlbums) == 0 || (len(simpleAlbums) == 1 && simpleAlbums[0].ID == album.ID) {
+		return album, nil
+	}
+
+	albumIDs := make([]string, 0)
+	for _, a := range simpleAlbums {
+		albumIDs = append(albumIDs, a.ID.String())
+	}
+	albums, err := s.spotify.GetAlbums(ctx, albumIDs)
+	if err != nil {
+		return spotify.FullAlbum{}, err
+	}
+	sort.Slice(albums, func(i, j int) bool {
+		// the first named artist is really the most important
+		if albums[i].Artists[0].ID != albums[j].Artists[0].ID {
+			return artistIndex[albums[i].Artists[0].ID.String()] < artistIndex[albums[j].Artists[0].ID.String()]
+		}
+		// albums are preferred over other releases
+		if albums[i].AlbumType == "album" && albums[j].AlbumType != "album" {
+			return true
+		}
+		// otherwise we prefer more recent releases
+		if !albums[i].ReleaseDateTime().Equal(albums[j].ReleaseDateTime()) {
+			return albums[i].ReleaseDateTime().Before(albums[j].ReleaseDateTime())
+		}
+		// lastly we prefer the largest albums
+		return albums[i].Tracks.Total < albums[j].Tracks.Total
+	})
+
+	for _, a := range albums {
+		for _, t := range a.Tracks.Tracks {
+			if t.Name == track.Name {
+				return a, nil
+			}
 		}
 	}
-	return libraryPlaylists
+
+	return album, nil
+}
+
+func (s *Service) trackAndAlbum(ctx context.Context, track spotify.FullTrack) (spotify.FullTrack, spotify.FullAlbum, error) {
+	album, err := s.albumForTrack(ctx, track)
+	if err != nil {
+		return spotify.FullTrack{}, spotify.FullAlbum{}, err
+	}
+	if album.ID == track.Album.ID {
+		return track, album, nil
+	}
+	for _, t := range album.Tracks.Tracks {
+		if t.Name == track.Name {
+			tt, err := s.spotify.GetTrack(ctx, t.ID.String())
+			if err != nil {
+				return spotify.FullTrack{}, spotify.FullAlbum{}, err
+			}
+			return tt, album, nil
+		}
+	}
+	return track, album, nil
+}
+
+func (s *Service) scoreTracks(ctx context.Context, tracks []spotify.FullTrack) ([]score, error) {
+	type indexAndTrack struct {
+		index  int
+		scores []score
+	}
+	paginator := spotifypaginator.New(
+		spotifypaginator.Parallelism(10),
+		spotifypaginator.PageSize(1),
+		spotifypaginator.InitialTotalCount(len(tracks)),
+	)
+	trackChan := make(chan indexAndTrack)
+	g, ctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		defer close(trackChan)
+		return paginator.Run(ctx, func(i int, opts *spotify.Options, next spotifypaginator.NextFunc) (result *spotifypaginator.NextResult, err error) {
+			scores := make([]score, 0)
+			from, to := *opts.Offset, *opts.Offset+*opts.Limit
+			for _, t := range tracks[from:to] {
+				track, album, err := s.trackAndAlbum(ctx, t)
+				if err != nil {
+					return nil, err
+				}
+				scores = append(scores, score{track: track, album: album})
+			}
+			s.log.Debug("getting most relevant tracks", "total count", len(tracks), "batch size", to-from, "from", from, "to", to)
+			trackChan <- indexAndTrack{i, scores}
+			return next(len(tracks)), nil
+		})
+	})
+
+	indexedScores := make([]indexAndTrack, 0)
+	for it := range trackChan {
+		indexedScores = append(indexedScores, it)
+	}
+	mostRelevant := make([]score, 0)
+	for _, indexed := range indexedScores {
+		mostRelevant = append(mostRelevant, indexed.scores...)
+	}
+	return mostRelevant, nil
+}
+
+func filterSimplePlaylist(playlists []spotify.SimplePlaylist, pred func(p spotify.SimplePlaylist) bool) []spotify.SimplePlaylist {
+	filtered := make([]spotify.SimplePlaylist, 0)
+	for _, p := range playlists {
+		if pred(p) {
+			filtered = append(filtered, p)
+		}
+	}
+	return filtered
+}
+
+func stringsContain(ss []string, v string) bool {
+	for _, s := range ss {
+		if s == v {
+			return true
+		}
+	}
+	return false
+}
+
+func tracksFor(playlists []spotify.FullPlaylist) []spotify.FullTrack {
+	tracks := make([]spotify.FullTrack, 0)
+	for _, p := range playlists {
+		for _, t := range p.Tracks.Tracks {
+			tracks = append(tracks, t.Track)
+		}
+	}
+	return tracks
+}
+
+func stringifyTrack(t spotify.FullTrack) string {
+	artistNames := make([]string, 0, len(t.Artists))
+	for _, a := range t.Artists {
+		artistNames = append(artistNames, a.Name)
+	}
+	sort.Strings(artistNames)
+
+	return fmt.Sprintf("%s - %s", t.Name, strings.Join(artistNames, ", "))
+}
+
+func uniqueTracks(tracks []spotify.FullTrack) []spotify.FullTrack {
+	seen := make(map[string]struct{})
+	unique := make([]spotify.FullTrack, 0)
+	for _, t := range tracks {
+		if _, isSeen := seen[stringifyTrack(t)]; !isSeen {
+			seen[stringifyTrack(t)] = struct{}{}
+			unique = append(unique, t)
+		}
+	}
+	return unique
+}
+
+func filterTracks(tracks []spotify.FullTrack, predicate func(t spotify.FullTrack) bool) []spotify.FullTrack {
+	filtered := make([]spotify.FullTrack, 0)
+	for _, t := range tracks {
+		if predicate(t) {
+			filtered = append(filtered, t)
+		}
+	}
+	return filtered
 }

@@ -40,6 +40,9 @@ func (s *SpotifyAdaptor) CurrentUser(ctx context.Context) (spotify.User, error) 
 }
 
 func (s *SpotifyAdaptor) CurrentTrack(ctx context.Context) (spotify.FullTrack, bool, error) {
+	if err := ctxhelper.Closed(ctx); err != nil {
+		return spotify.FullTrack{}, false, fmt.Errorf("getting currently playing track: %w", err)
+	}
 	p, err := s.spotify.PlayerCurrentlyPlaying()
 	if err != nil {
 		return spotify.FullTrack{}, false, fmt.Errorf("getting currently playing track: %w", err)
@@ -48,4 +51,29 @@ func (s *SpotifyAdaptor) CurrentTrack(ctx context.Context) (spotify.FullTrack, b
 		return spotify.FullTrack{}, false, nil
 	}
 	return *p.Item, true, nil
+}
+
+func (s *SpotifyAdaptor) GetTrack(ctx context.Context, trackID string) (spotify.FullTrack, error) {
+	if err := ctxhelper.Closed(ctx); err != nil {
+		return spotify.FullTrack{}, fmt.Errorf("getting track %s: %w", trackID, err)
+	}
+	storeKey := fmt.Sprintf("track_%s", trackID)
+	var stored spotify.FullTrack
+	if exists, err := s.kv.Get(ctx, storeKey, &stored); err == nil && exists {
+		return stored, nil
+	} else if err != nil {
+		return spotify.FullTrack{}, fmt.Errorf("getting track %s from store: %w", trackID, err)
+	}
+
+	track, err := s.spotify.GetTrack(spotify.ID(trackID))
+	if err != nil {
+		return spotify.FullTrack{}, fmt.Errorf("getting track %s: %w", trackID, err)
+	}
+	if track == nil {
+		return spotify.FullTrack{}, fmt.Errorf("track %s doesn't exist", trackID)
+	}
+	if err := s.kv.Put(ctx, storeKey, *track); err != nil {
+		return spotify.FullTrack{}, fmt.Errorf("storing track %s: %w", trackID, err)
+	}
+	return *track, nil
 }

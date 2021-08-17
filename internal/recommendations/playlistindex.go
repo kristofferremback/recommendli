@@ -52,6 +52,11 @@ func (t *TrackPlaylistIndex) Lookup(tt spotify.FullTrack) ([]spotify.SimplePlayl
 	return playlists, ok
 }
 
+func (t *TrackPlaylistIndex) Has(tt spotify.FullTrack) bool {
+	_, ok := t.Tracks[t.Key(tt)]
+	return ok
+}
+
 func (t *TrackPlaylistIndex) MatchesSimpleLaylists(simplePlaylists []spotify.SimplePlaylist) bool {
 	if len(t.Playlists) != len(simplePlaylists) {
 		return false

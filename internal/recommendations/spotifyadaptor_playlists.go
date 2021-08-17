@@ -29,6 +29,39 @@ func (s *SpotifyAdaptor) GetPlaylist(ctx context.Context, playlistID string) (sp
 	return s.getStoredPlaylist(ctx, playlistID, "")
 }
 
+func (s *SpotifyAdaptor) CreatePlaylist(ctx context.Context, userID, name string, trackIDs []string) (spotify.FullPlaylist, error) {
+	if err := ctxhelper.Closed(ctx); err != nil {
+		return spotify.FullPlaylist{}, fmt.Errorf("creating playlist %s for user %s: %w", name, userID, err)
+	}
+	created, err := s.spotify.CreatePlaylistForUser(userID, name, "Auto generated playlist by recommendli", true)
+	if err != nil {
+		return spotify.FullPlaylist{}, fmt.Errorf("creating playlist %s for user %s: %w", name, userID, err)
+	}
+
+	if err := s.addTracksToPlaylist(ctx, created.ID.String(), trackIDs); err != nil {
+		return spotify.FullPlaylist{}, err
+	}
+	return s.GetPlaylist(ctx, created.ID.String())
+}
+
+func (s *SpotifyAdaptor) addTracksToPlaylist(ctx context.Context, id string, trackIDs []string) error {
+	paginator := spotifypaginator.New(spotifypaginator.PageSize(100), spotifypaginator.InitialTotalCount(len(trackIDs)))
+	if err := paginator.RunSync(ctx, func(index int, opts *spotify.Options, next spotifypaginator.NextFunc) (result *spotifypaginator.NextResult, err error) {
+		from, to := *opts.Offset, *opts.Offset+*opts.Limit
+		spotifyIDs := make([]spotify.ID, 0)
+		for _, id := range trackIDs[from:to] {
+			spotifyIDs = append(spotifyIDs, spotify.ID(id))
+		}
+		if _, err := s.spotify.AddTracksToPlaylist(spotify.ID(id), spotifyIDs...); err != nil {
+			return nil, err
+		}
+		return next(len(trackIDs)), nil
+	}); err != nil {
+		return fmt.Errorf("adding tracks to playlist %s: %w", id, err)
+	}
+	return nil
+}
+
 func (s *SpotifyAdaptor) PopulatePlaylists(ctx context.Context, simplePlaylists []spotify.SimplePlaylist) ([]spotify.FullPlaylist, error) {
 	if err := ctxhelper.Closed(ctx); err != nil {
 		return nil, fmt.Errorf("populating playlists: %w", err)
