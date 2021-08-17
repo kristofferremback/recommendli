@@ -60,12 +60,7 @@ func (s *Service) GetCurrentUsersPlaylistMatchingPattern(ctx context.Context, pa
 		return nil, err
 	}
 
-	matching := make([]spotify.SimplePlaylist, 0)
-	for _, p := range playlists {
-		if re.MatchString(p.Name) {
-			matching = append(matching, p)
-		}
-	}
+	matching := filterMatchingNames(re, playlists)
 	if len(matching) == 0 {
 		return nil, nil
 	}
@@ -112,12 +107,7 @@ func (s *Service) CheckPlayingTrackInLibrary(ctx context.Context) (spotify.FullT
 	if err != nil {
 		return spotify.FullTrack{}, nil, fmt.Errorf("generating spot: %w", err)
 	}
-	libraryPlaylists := make([]spotify.SimplePlaylist, 0)
-	for _, p := range playlists {
-		if re.MatchString(p.Name) {
-			libraryPlaylists = append(libraryPlaylists, p)
-		}
-	}
+	libraryPlaylists := filterMatchingNames(re, playlists)
 
 	indexedLibrary, err := s.getStoredTrackPlaylistIndex(ctx, usr, libraryPlaylists)
 	if err != nil {
@@ -137,6 +127,16 @@ func (s *Service) CheckPlayingTrackInLibrary(ctx context.Context) (spotify.FullT
 
 	s.log.Info("current track is new", "track", indexedLibrary.Key(currentTrack))
 	return currentTrack, nil, nil
+}
+
+func filterMatchingNames(re *regexp.Regexp, playlists []spotify.SimplePlaylist) []spotify.SimplePlaylist {
+	libraryPlaylists := make([]spotify.SimplePlaylist, 0)
+	for _, p := range playlists {
+		if re.MatchString(p.Name) {
+			libraryPlaylists = append(libraryPlaylists, p)
+		}
+	}
+	return libraryPlaylists
 }
 
 func (s *Service) getStoredTrackPlaylistIndex(ctx context.Context, usr spotify.User, simplePlaylists []spotify.SimplePlaylist) (*TrackPlaylistIndex, error) {
