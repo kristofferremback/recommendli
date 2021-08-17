@@ -22,23 +22,29 @@ type SpotifyProvider interface {
 	CurrentTrack(ctx context.Context) (spotify.FullTrack, bool, error)
 }
 
-type ServiceFactory struct {
-	log   logging.Logger
-	store KeyValueStore
+type UserPreferenceProvider interface {
+	GetLibraryPattern(ctx context.Context, userID string) (*regexp.Regexp, error)
 }
 
-func NewServiceFactory(log logging.Logger, store KeyValueStore) *ServiceFactory {
-	return &ServiceFactory{log: log, store: store}
+type ServiceFactory struct {
+	log             logging.Logger
+	store           KeyValueStore
+	userPreferences UserPreferenceProvider
+}
+
+func NewServiceFactory(log logging.Logger, store KeyValueStore, userPreferences UserPreferenceProvider) *ServiceFactory {
+	return &ServiceFactory{log: log, store: store, userPreferences: userPreferences}
 }
 
 func (f *ServiceFactory) New(spotifyProvider SpotifyProvider) *Service {
-	return &Service{log: f.log, store: f.store, spotify: spotifyProvider}
+	return &Service{log: f.log, store: f.store, userPreferences: f.userPreferences, spotify: spotifyProvider}
 }
 
 type Service struct {
-	log     logging.Logger
-	store   KeyValueStore
-	spotify SpotifyProvider
+	log             logging.Logger
+	store           KeyValueStore
+	userPreferences UserPreferenceProvider
+	spotify         SpotifyProvider
 }
 
 func (s *Service) ListPlaylistsForCurrentUser(ctx context.Context) ([]spotify.SimplePlaylist, error) {
@@ -100,18 +106,17 @@ func (s *Service) CheckPlayingTrackInLibrary(ctx context.Context) (spotify.FullT
 
 	playlists, err := s.spotify.ListPlaylists(ctx, usr.ID)
 	if err != nil {
-		return spotify.FullTrack{}, nil, fmt.Errorf("listing user playlists when generating spot recommendations: %w", err)
+		return spotify.FullTrack{}, nil, fmt.Errorf("listing user playlists checking if track is in library: %w", err)
 	}
-	// TODO: store this in some form of user preferences
-	re, err := regexp.Compile(`^Metal \d+`)
+	re, err := s.userPreferences.GetLibraryPattern(ctx, usr.ID)
 	if err != nil {
-		return spotify.FullTrack{}, nil, fmt.Errorf("generating spot: %w", err)
+		return spotify.FullTrack{}, nil, fmt.Errorf("checking if track is in library: %w", err)
 	}
 	libraryPlaylists := filterMatchingNames(re, playlists)
 
 	indexedLibrary, err := s.getStoredTrackPlaylistIndex(ctx, usr, libraryPlaylists)
 	if err != nil {
-		return spotify.FullTrack{}, nil, fmt.Errorf("populating base playlists when generating spot recommendations: %w", err)
+		return spotify.FullTrack{}, nil, fmt.Errorf("populating base playlists when checking if track is in library: %w", err)
 	}
 
 	s.log.Info("tracks fully listed", "unique song count", len(indexedLibrary.Tracks), "playlist count", len(indexedLibrary.Playlists))
@@ -127,41 +132,4 @@ func (s *Service) CheckPlayingTrackInLibrary(ctx context.Context) (spotify.FullT
 
 	s.log.Info("current track is new", "track", indexedLibrary.Key(currentTrack))
 	return currentTrack, nil, nil
-}
-
-func filterMatchingNames(re *regexp.Regexp, playlists []spotify.SimplePlaylist) []spotify.SimplePlaylist {
-	libraryPlaylists := make([]spotify.SimplePlaylist, 0)
-	for _, p := range playlists {
-		if re.MatchString(p.Name) {
-			libraryPlaylists = append(libraryPlaylists, p)
-		}
-	}
-	return libraryPlaylists
-}
-
-func (s *Service) getStoredTrackPlaylistIndex(ctx context.Context, usr spotify.User, simplePlaylists []spotify.SimplePlaylist) (*TrackPlaylistIndex, error) {
-	storeKey := fmt.Sprintf("cache_track-playlist-index_%s", usr.ID)
-	s.log.Debug("checking stored track playlist index", "user", usr.DisplayName, "key", storeKey)
-	var index *TrackPlaylistIndex
-	found, err := s.store.Get(ctx, storeKey, &index)
-	if err != nil {
-		return nil, err
-	}
-	if found && index.MatchesSimpleLaylists(simplePlaylists) {
-		s.log.Debug("stored track playlist index", "user", usr.DisplayName, "key", storeKey)
-		return index, nil
-	}
-
-	s.log.Debug("updating stored track playlist index", "user", usr.DisplayName, "key", storeKey)
-	populatedLibrary, err := s.spotify.PopulatePlaylists(ctx, simplePlaylists)
-	if err != nil {
-		return nil, err
-	}
-	index = NewTrackPlaylistIndexFromFullPlaylists(populatedLibrary)
-	if err := s.store.Put(ctx, storeKey, &index); err != nil {
-		return nil, err
-	}
-	s.log.Debug("stored track playlist index updated", "user", usr.DisplayName, "key", storeKey)
-
-	return index, nil
 }

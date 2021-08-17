@@ -57,7 +57,7 @@ func main() {
 	authAdaptor := recommendations.NewSpotifyAuthAdaptor(clientID, clientSecret, *redirectURL, log)
 	r.Get(authAdaptor.Path(), authAdaptor.TokenCallbackHandler())
 	r.Mount("/recommendations", recommendations.NewRouter(
-		recommendations.NewServiceFactory(log, keyvaluestore.JSONDiskStore("/Users/kristofferostlund/.recommendli/recommendations/cache")),
+		recommendations.NewServiceFactory(log, keyvaluestore.JSONDiskStore("/Users/kristofferostlund/.recommendli/recommendations/cache"), &recommendations.DummyUserPreferenceProvider{}),
 		recommendations.NewSpotifyProviderFactory(log, keyvaluestore.JSONDiskStore("/Users/kristofferostlund/.recommendli/recommendations/playlists")),
 		authAdaptor,
 		log,
