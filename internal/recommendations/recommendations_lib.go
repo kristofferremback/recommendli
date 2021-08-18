@@ -161,6 +161,18 @@ func (s *Service) scoreTracks(ctx context.Context, tracks []spotify.FullTrack) (
 	return mostRelevant, nil
 }
 
+func (s *Service) setPlaylist(ctx context.Context, existingPlaylists []spotify.SimplePlaylist, userID, playlistName string, trackIDs []string) (spotify.FullPlaylist, error) {
+	for _, p := range existingPlaylists {
+		if p.Name == playlistName {
+			if err := s.spotify.TruncatePlaylist(ctx, p.ID.String(), p.SnapshotID); err != nil {
+				return spotify.FullPlaylist{}, fmt.Errorf("truncating playlist %s: %w", p.ID, err)
+			}
+			return s.spotify.SetPlaylistTracks(ctx, p.ID.String(), trackIDs)
+		}
+	}
+	return s.spotify.CreatePlaylist(ctx, userID, playlistName, trackIDs)
+}
+
 func filterSimplePlaylist(playlists []spotify.SimplePlaylist, pred func(p spotify.SimplePlaylist) bool) []spotify.SimplePlaylist {
 	filtered := make([]spotify.SimplePlaylist, 0)
 	for _, p := range playlists {

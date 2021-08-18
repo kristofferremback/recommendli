@@ -44,6 +44,39 @@ func (s *SpotifyAdaptor) CreatePlaylist(ctx context.Context, userID, name string
 	return s.GetPlaylist(ctx, created.ID.String())
 }
 
+func (s *SpotifyAdaptor) TruncatePlaylist(ctx context.Context, playlistID string, snapshotID string) error {
+	if err := ctxhelper.Closed(ctx); err != nil {
+		return fmt.Errorf("truncating playlist %s: %w", playlistID, err)
+	}
+
+	playlist, err := s.getStoredPlaylist(ctx, playlistID, snapshotID)
+	if err != nil {
+		return fmt.Errorf("getting existing playlist when truncating playlist %s: %w", playlistID, err)
+	}
+
+	if playlist.Tracks.Total > 0 {
+		prevTrackIDs := make([]spotify.ID, 0)
+		for _, t := range playlist.Tracks.Tracks {
+			prevTrackIDs = append(prevTrackIDs, t.Track.ID)
+		}
+		if _, err := s.spotify.RemoveTracksFromPlaylist(spotify.ID(playlistID), prevTrackIDs...); err != nil {
+			return fmt.Errorf("removing tracks from playlist %s: %w", playlistID, err)
+		}
+	}
+
+	return nil
+}
+
+func (s *SpotifyAdaptor) SetPlaylistTracks(ctx context.Context, playlistID string, trackIDs []string) (spotify.FullPlaylist, error) {
+	if err := ctxhelper.Closed(ctx); err != nil {
+		return spotify.FullPlaylist{}, fmt.Errorf("seting tracks for playlist %s: %w", playlistID, err)
+	}
+	if err := s.addTracksToPlaylist(ctx, playlistID, trackIDs); err != nil {
+		return spotify.FullPlaylist{}, err
+	}
+	return s.getPlaylist(ctx, playlistID)
+}
+
 func (s *SpotifyAdaptor) addTracksToPlaylist(ctx context.Context, id string, trackIDs []string) error {
 	paginator := spotifypaginator.New(spotifypaginator.PageSize(100), spotifypaginator.InitialTotalCount(len(trackIDs)))
 	if err := paginator.RunSync(ctx, func(index int, opts *spotify.Options, next spotifypaginator.NextFunc) (result *spotifypaginator.NextResult, err error) {

@@ -22,6 +22,8 @@ type SpotifyProvider interface {
 	GetPlaylist(ctx context.Context, playlistID string) (spotify.FullPlaylist, error)
 	PopulatePlaylists(ctx context.Context, simplePlaylists []spotify.SimplePlaylist) ([]spotify.FullPlaylist, error)
 	CreatePlaylist(ctx context.Context, userID, name string, trackIDs []string) (spotify.FullPlaylist, error)
+	SetPlaylistTracks(ctx context.Context, playlistID string, trackIDs []string) (spotify.FullPlaylist, error)
+	TruncatePlaylist(ctx context.Context, playlistID, snapshotID string) error
 	CurrentUser(ctx context.Context) (spotify.User, error)
 	CurrentTrack(ctx context.Context) (spotify.FullTrack, bool, error)
 	GetAlbum(ctx context.Context, albumID string) (spotify.FullAlbum, error)
@@ -247,6 +249,5 @@ func (s *Service) GenerateDiscoveryPlaylist(ctx context.Context) (spotify.FullPl
 	}
 
 	playlistName := prefs.RecommendationPlaylistName("discovery", time.Now())
-	// TODO: Truncate and update the playlist if it already exists
-	return s.spotify.CreatePlaylist(ctx, usr.ID, playlistName, trackIDs)
+	return s.setPlaylist(ctx, playlists, usr.ID, playlistName, trackIDs)
 }
