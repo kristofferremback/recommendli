@@ -79,8 +79,8 @@ func (s *SpotifyAdaptor) SetPlaylistTracks(ctx context.Context, playlistID strin
 
 func (s *SpotifyAdaptor) addTracksToPlaylist(ctx context.Context, id string, trackIDs []string) error {
 	paginator := spotifypaginator.New(spotifypaginator.PageSize(100), spotifypaginator.InitialTotalCount(len(trackIDs)))
-	if err := paginator.RunSync(ctx, func(index int, opts *spotify.Options, next spotifypaginator.NextFunc) (result *spotifypaginator.NextResult, err error) {
-		from, to := *opts.Offset, *opts.Offset+*opts.Limit
+	if err := paginator.RunSync(ctx, func(index int, opts spotifypaginator.PageOpts, next spotifypaginator.NextFunc) (result *spotifypaginator.NextResult, err error) {
+		from, to := opts.Offset, opts.Offset+opts.Limit
 		spotifyIDs := make([]spotify.ID, 0)
 		for _, id := range trackIDs[from:to] {
 			spotifyIDs = append(spotifyIDs, spotify.ID(id))
@@ -148,8 +148,8 @@ func (s *SpotifyAdaptor) getPlaylist(ctx context.Context, playlistID string) (sp
 		g, ctx := errgroup.WithContext(ctx)
 		g.Go(func() error {
 			defer close(itChan)
-			return paginator.Run(ctx, func(i int, opts *spotify.Options, next spotifypaginator.NextFunc) (result *spotifypaginator.NextResult, err error) {
-				page, err := s.spotify.GetPlaylistTracksOpt(spotify.ID(p.ID), opts, "")
+			return paginator.Run(ctx, func(i int, opts spotifypaginator.PageOpts, next spotifypaginator.NextFunc) (result *spotifypaginator.NextResult, err error) {
+				page, err := s.spotify.GetPlaylistTracksOpt(spotify.ID(p.ID), spotifyOpts(opts), "")
 				if err != nil {
 					return nil, err
 				}
@@ -189,8 +189,8 @@ func (s *SpotifyAdaptor) listPlaylists(ctx context.Context, userID string) ([]sp
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		defer close(ipChan)
-		return paginator.Run(ctx, func(i int, opts *spotify.Options, next spotifypaginator.NextFunc) (*spotifypaginator.NextResult, error) {
-			page, err := s.spotify.GetPlaylistsForUserOpt(userID, opts)
+		return paginator.Run(ctx, func(i int, opts spotifypaginator.PageOpts, next spotifypaginator.NextFunc) (*spotifypaginator.NextResult, error) {
+			page, err := s.spotify.GetPlaylistsForUserOpt(userID, spotifyOpts(opts))
 			if err != nil {
 				return nil, err
 			}

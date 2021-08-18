@@ -134,9 +134,9 @@ func (s *Service) scoreTracks(ctx context.Context, tracks []spotify.FullTrack) (
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		defer close(trackChan)
-		return paginator.Run(ctx, func(i int, opts *spotify.Options, next spotifypaginator.NextFunc) (result *spotifypaginator.NextResult, err error) {
+		return paginator.Run(ctx, func(i int, opts spotifypaginator.PageOpts, next spotifypaginator.NextFunc) (result *spotifypaginator.NextResult, err error) {
 			scores := make([]score, 0)
-			from, to := *opts.Offset, *opts.Offset+*opts.Limit
+			from, to := opts.Offset, opts.Offset+opts.Limit
 			for _, t := range tracks[from:to] {
 				track, album, err := s.trackAndAlbum(ctx, t)
 				if err != nil {

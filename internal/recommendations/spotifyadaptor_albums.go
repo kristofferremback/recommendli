@@ -92,8 +92,8 @@ func (s *SpotifyAdaptor) getAlbums(ctx context.Context, albumIDs []string) ([]sp
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		defer close(albumChan)
-		return paginator.Run(ctx, func(index int, opts *spotify.Options, next spotifypaginator.NextFunc) (result *spotifypaginator.NextResult, err error) {
-			from, to := *opts.Offset, *opts.Offset+*opts.Limit
+		return paginator.Run(ctx, func(index int, opts spotifypaginator.PageOpts, next spotifypaginator.NextFunc) (result *spotifypaginator.NextResult, err error) {
+			from, to := opts.Offset, opts.Offset+opts.Limit
 			spotifyIDs := make([]spotify.ID, 0)
 			for _, id := range albumIDs[from:to] {
 				spotifyIDs = append(spotifyIDs, spotify.ID(id))
@@ -145,8 +145,8 @@ func (s *SpotifyAdaptor) ListArtistAlbums(ctx context.Context, artistID string) 
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		defer close(albumChan)
-		return paginator.Run(ctx, func(index int, opts *spotify.Options, next spotifypaginator.NextFunc) (result *spotifypaginator.NextResult, err error) {
-			page, err := s.spotify.GetArtistAlbumsOpt(spotify.ID(artistID), opts, spotify.AlbumTypeAlbum, spotify.AlbumTypeSingle)
+		return paginator.Run(ctx, func(index int, opts spotifypaginator.PageOpts, next spotifypaginator.NextFunc) (result *spotifypaginator.NextResult, err error) {
+			page, err := s.spotify.GetArtistAlbumsOpt(spotify.ID(artistID), spotifyOpts(opts), spotify.AlbumTypeAlbum, spotify.AlbumTypeSingle)
 			if err != nil {
 				return nil, err
 			}
