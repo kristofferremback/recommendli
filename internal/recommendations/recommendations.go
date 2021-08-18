@@ -39,7 +39,7 @@ type UserPreferenceProvider interface {
 type UserPreferences struct {
 	LibraryPattern                   *regexp.Regexp
 	DiscoveryPlaylistNames           []string
-	PenaltyWords                     map[string]int
+	WeightedWords                    map[string]int
 	MinimumAlbumSize                 int
 	RecommendationPlaylistNamePrefix string
 }
@@ -88,7 +88,7 @@ func (s score) keep(prefs UserPreferences) bool {
 
 func (s score) calculate(prefs UserPreferences) int {
 	value := 0
-	for word, penalty := range prefs.PenaltyWords {
+	for word, penalty := range prefs.WeightedWords {
 		if strings.Contains(strings.ToLower(s.track.Name), strings.ToLower(word)) {
 			value += penalty
 		}

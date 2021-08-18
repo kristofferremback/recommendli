@@ -14,7 +14,7 @@ func NewDummyUserPreferenceProvider() *DummyUserPreferenceProvider {
 		prefs: UserPreferences{
 			LibraryPattern:         regexp.MustCompile(`^Metal \d+`),
 			DiscoveryPlaylistNames: []string{"Release Radar", "Discover Weekly"},
-			PenaltyWords: map[string]int{
+			WeightedWords: map[string]int{
 				"instrumental": -50,
 				"acoustic":     -30,
 				"re-imagined":  -30,
