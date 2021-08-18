@@ -161,7 +161,7 @@ func (s *Service) scoreTracks(ctx context.Context, tracks []spotify.FullTrack) (
 	return mostRelevant, nil
 }
 
-func (s *Service) setPlaylist(ctx context.Context, existingPlaylists []spotify.SimplePlaylist, userID, playlistName string, trackIDs []string) (spotify.FullPlaylist, error) {
+func (s *Service) upsertPlaylistByName(ctx context.Context, existingPlaylists []spotify.SimplePlaylist, userID, playlistName string, trackIDs []string) (spotify.FullPlaylist, error) {
 	for _, p := range existingPlaylists {
 		if p.Name == playlistName {
 			if err := s.spotify.TruncatePlaylist(ctx, p.ID.String(), p.SnapshotID); err != nil {

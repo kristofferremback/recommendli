@@ -249,5 +249,14 @@ func (s *Service) GenerateDiscoveryPlaylist(ctx context.Context) (spotify.FullPl
 	}
 
 	playlistName := prefs.RecommendationPlaylistName("discovery", time.Now())
-	return s.setPlaylist(ctx, playlists, usr.ID, playlistName, trackIDs)
+	playlist, err := s.upsertPlaylistByName(ctx, playlists, usr.ID, playlistName, trackIDs)
+	if err != nil {
+		return spotify.FullPlaylist{}, fmt.Errorf("setting discovery playlist %s for user %s: %w", playlistName, usr.ID, err)
+	}
+	playlistTracks := make([]string, 0)
+	for _, t := range playlist.Tracks.Tracks {
+		playlistTracks = append(playlistTracks, stringifyTrack(t.Track))
+	}
+	s.log.Info("recommendation complete", "playlist", playlist.Name, "tracks", playlistTracks, "track count", playlist.Tracks.Total)
+	return playlist, nil
 }
