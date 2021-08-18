@@ -6,7 +6,7 @@ import (
 
 	"github.com/kristofferostlund/recommendli/pkg/ctxhelper"
 	"github.com/kristofferostlund/recommendli/pkg/logging"
-	"github.com/kristofferostlund/recommendli/pkg/spotifypaginator"
+	"github.com/kristofferostlund/recommendli/pkg/paginator"
 	"github.com/zmb3/spotify"
 )
 
@@ -79,6 +79,6 @@ func (s *SpotifyAdaptor) GetTrack(ctx context.Context, trackID string) (spotify.
 	return *track, nil
 }
 
-func spotifyOpts(opts spotifypaginator.PageOpts) *spotify.Options {
+func spotifyOpts(opts paginator.PageOpts) *spotify.Options {
 	return &spotify.Options{Limit: &opts.Limit, Offset: &opts.Offset}
 }

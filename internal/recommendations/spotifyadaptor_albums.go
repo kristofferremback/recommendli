@@ -6,7 +6,7 @@ import (
 	"sort"
 
 	"github.com/kristofferostlund/recommendli/pkg/ctxhelper"
-	"github.com/kristofferostlund/recommendli/pkg/spotifypaginator"
+	"github.com/kristofferostlund/recommendli/pkg/paginator"
 	"github.com/zmb3/spotify"
 	"golang.org/x/sync/errgroup"
 )
@@ -87,12 +87,12 @@ func (s *SpotifyAdaptor) getAlbums(ctx context.Context, albumIDs []string) ([]sp
 		albums []spotify.FullAlbum
 	}
 
-	paginator := spotifypaginator.New(spotifypaginator.Parallelism(10), spotifypaginator.PageSize(20), spotifypaginator.InitialTotalCount(len(albumIDs)))
+	pgtr := paginator.New(paginator.Parallelism(10), paginator.PageSize(20), paginator.InitialTotalCount(len(albumIDs)))
 	albumChan := make(chan indexAndAlbums)
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		defer close(albumChan)
-		return paginator.Run(ctx, func(index int, opts spotifypaginator.PageOpts, next spotifypaginator.NextFunc) (result *spotifypaginator.NextResult, err error) {
+		return pgtr.Run(ctx, func(index int, opts paginator.PageOpts, next paginator.NextFunc) (result *paginator.NextResult, err error) {
 			from, to := opts.Offset, opts.Offset+opts.Limit
 			spotifyIDs := make([]spotify.ID, 0)
 			for _, id := range albumIDs[from:to] {
@@ -140,12 +140,12 @@ func (s *SpotifyAdaptor) ListArtistAlbums(ctx context.Context, artistID string) 
 		albums []spotify.SimpleAlbum
 	}
 
-	paginator := spotifypaginator.New(spotifypaginator.Parallelism(10))
+	pgtr := paginator.New(paginator.Parallelism(10))
 	albumChan := make(chan indexAndAlbums)
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		defer close(albumChan)
-		return paginator.Run(ctx, func(index int, opts spotifypaginator.PageOpts, next spotifypaginator.NextFunc) (result *spotifypaginator.NextResult, err error) {
+		return pgtr.Run(ctx, func(index int, opts paginator.PageOpts, next paginator.NextFunc) (result *paginator.NextResult, err error) {
 			page, err := s.spotify.GetArtistAlbumsOpt(spotify.ID(artistID), spotifyOpts(opts), spotify.AlbumTypeAlbum, spotify.AlbumTypeSingle)
 			if err != nil {
 				return nil, err

@@ -6,7 +6,7 @@ import (
 	"sort"
 
 	"github.com/kristofferostlund/recommendli/pkg/ctxhelper"
-	"github.com/kristofferostlund/recommendli/pkg/spotifypaginator"
+	"github.com/kristofferostlund/recommendli/pkg/paginator"
 	"github.com/zmb3/spotify"
 	"golang.org/x/sync/errgroup"
 )
@@ -78,8 +78,8 @@ func (s *SpotifyAdaptor) SetPlaylistTracks(ctx context.Context, playlistID strin
 }
 
 func (s *SpotifyAdaptor) addTracksToPlaylist(ctx context.Context, id string, trackIDs []string) error {
-	paginator := spotifypaginator.New(spotifypaginator.PageSize(100), spotifypaginator.InitialTotalCount(len(trackIDs)))
-	if err := paginator.RunSync(ctx, func(index int, opts spotifypaginator.PageOpts, next spotifypaginator.NextFunc) (result *spotifypaginator.NextResult, err error) {
+	pgtr := paginator.New(paginator.PageSize(100), paginator.InitialTotalCount(len(trackIDs)))
+	if err := pgtr.RunSync(ctx, func(index int, opts paginator.PageOpts, next paginator.NextFunc) (result *paginator.NextResult, err error) {
 		from, to := opts.Offset, opts.Offset+opts.Limit
 		spotifyIDs := make([]spotify.ID, 0)
 		for _, id := range trackIDs[from:to] {
@@ -143,12 +143,12 @@ func (s *SpotifyAdaptor) getPlaylist(ctx context.Context, playlistID string) (sp
 			tracks []spotify.PlaylistTrack
 		}
 
-		paginator := spotifypaginator.New(spotifypaginator.InitialOffset(len(p.Tracks.Tracks)), spotifypaginator.Parallelism(10))
+		pgtr := paginator.New(paginator.InitialOffset(len(p.Tracks.Tracks)), paginator.Parallelism(10))
 		itChan := make(chan indexAndTracks)
 		g, ctx := errgroup.WithContext(ctx)
 		g.Go(func() error {
 			defer close(itChan)
-			return paginator.Run(ctx, func(i int, opts spotifypaginator.PageOpts, next spotifypaginator.NextFunc) (result *spotifypaginator.NextResult, err error) {
+			return pgtr.Run(ctx, func(i int, opts paginator.PageOpts, next paginator.NextFunc) (result *paginator.NextResult, err error) {
 				page, err := s.spotify.GetPlaylistTracksOpt(spotify.ID(p.ID), spotifyOpts(opts), "")
 				if err != nil {
 					return nil, err
@@ -184,12 +184,12 @@ func (s *SpotifyAdaptor) listPlaylists(ctx context.Context, userID string) ([]sp
 		playlists []spotify.SimplePlaylist
 	}
 
-	paginator := spotifypaginator.New(spotifypaginator.Parallelism(10))
+	pgtr := paginator.New(paginator.Parallelism(10))
 	ipChan := make(chan indexAndPlaylists)
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		defer close(ipChan)
-		return paginator.Run(ctx, func(i int, opts spotifypaginator.PageOpts, next spotifypaginator.NextFunc) (*spotifypaginator.NextResult, error) {
+		return pgtr.Run(ctx, func(i int, opts paginator.PageOpts, next paginator.NextFunc) (*paginator.NextResult, error) {
 			page, err := s.spotify.GetPlaylistsForUserOpt(userID, spotifyOpts(opts))
 			if err != nil {
 				return nil, err

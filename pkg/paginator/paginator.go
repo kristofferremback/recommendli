@@ -1,4 +1,4 @@
-package spotifypaginator
+package paginator
 
 import (
 	"context"
