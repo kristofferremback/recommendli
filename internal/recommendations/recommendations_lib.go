@@ -212,6 +212,10 @@ func stringifyTrack(t spotify.FullTrack) string {
 	return fmt.Sprintf("%s - %s", t.Name, strings.Join(artistNames, ", "))
 }
 
+func printableTrack(t spotify.FullTrack) string {
+	return fmt.Sprintf("%s - %s", t.URI, stringifyTrack(t))
+}
+
 func uniqueTracks(tracks []spotify.FullTrack) []spotify.FullTrack {
 	seen := make(map[string]struct{})
 	unique := make([]spotify.FullTrack, 0)

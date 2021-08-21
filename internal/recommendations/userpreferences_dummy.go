@@ -20,7 +20,7 @@ func NewDummyUserPreferenceProvider() *DummyUserPreferenceProvider {
 				"re-imagined":  -30,
 				"remix":        -30,
 			},
-			MinimumAlbumSize:                 3,
+			MinimumAlbumSize:                 4,
 			RecommendationPlaylistNamePrefix: "recommendli",
 		},
 	}

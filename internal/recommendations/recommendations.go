@@ -233,7 +233,9 @@ func (s *Service) GenerateDiscoveryPlaylist(ctx context.Context) (spotify.FullPl
 	if err != nil {
 		return spotify.FullPlaylist{}, fmt.Errorf("populating discovery playlists when generating discovery playlist: %w", err)
 	}
-	scores, err := s.scoreTracks(ctx, filterTracks(uniqueTracks(tracksFor(populatedDiscovery)), indexedLibrary.Has))
+	scores, err := s.scoreTracks(ctx, filterTracks(uniqueTracks(tracksFor(populatedDiscovery)), func(t spotify.FullTrack) bool {
+		return !indexedLibrary.Has(t)
+	}))
 	if err != nil {
 		return spotify.FullPlaylist{}, fmt.Errorf("getting most relevant versions of tracks when generating discovery playlist: %w", err)
 	}
@@ -255,7 +257,7 @@ func (s *Service) GenerateDiscoveryPlaylist(ctx context.Context) (spotify.FullPl
 	}
 	playlistTracks := make([]string, 0)
 	for _, t := range playlist.Tracks.Tracks {
-		playlistTracks = append(playlistTracks, stringifyTrack(t.Track))
+		playlistTracks = append(playlistTracks, printableTrack(t.Track))
 	}
 	s.log.Info("recommendation complete", "playlist", playlist.Name, "tracks", playlistTracks, "track count", playlist.Tracks.Total)
 	return playlist, nil
