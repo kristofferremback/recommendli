@@ -16,32 +16,32 @@ func JSONDiskStore(dir string) *DiskStore {
 	return &DiskStore{dir: dir, serializer: &JSONSerializer{}}
 }
 
-func (c *DiskStore) Get(ctx context.Context, key string, out interface{}) (bool, error) {
+func (d *DiskStore) Get(ctx context.Context, key string, out interface{}) (bool, error) {
 	// File doesn't exist is fine
-	if _, err := os.Stat(c.filename(key)); err != nil {
+	if _, err := os.Stat(d.filename(key)); err != nil {
 		return false, nil
 	}
-	file, err := os.Open(c.filename(key))
+	file, err := os.Open(d.filename(key))
 	if err != nil {
 		return false, fmt.Errorf("opening file: %w", err)
 	}
 	defer file.Close()
-	if err := c.serializer.Deserialize(file, &out); err != nil {
+	if err := d.serializer.Deserialize(file, &out); err != nil {
 		return false, fmt.Errorf("deserializing data: %w", err)
 	}
 	return true, nil
 }
 
-func (c *DiskStore) Put(ctx context.Context, key string, data interface{}) error {
-	if err := mkdirp(c.dir); err != nil {
+func (d *DiskStore) Put(ctx context.Context, key string, data interface{}) error {
+	if err := mkdirp(d.dir); err != nil {
 		return fmt.Errorf("creating directory: %w", err)
 	}
-	file, err := os.OpenFile(c.filename(key), os.O_RDWR|os.O_CREATE|os.O_TRUNC, os.ModePerm)
+	file, err := os.OpenFile(d.filename(key), os.O_RDWR|os.O_CREATE|os.O_TRUNC, os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("opening file: %w", err)
 	}
 	defer file.Close()
-	if err := c.serializer.Serialize(file, data); err != nil {
+	if err := d.serializer.Serialize(file, data); err != nil {
 		return fmt.Errorf("serializing data: %w", err)
 	}
 	return nil

@@ -20,7 +20,7 @@ func (s *Service) getStoredTrackPlaylistIndex(ctx context.Context, usr spotify.U
 		return nil, err
 	}
 	if found && index.MatchesSimpleLaylists(simplePlaylists) {
-		s.log.Debug("stored track playlist index", "user", usr.DisplayName, "key", storeKey)
+		s.log.Debug("using stored track playlist index", "user", usr.DisplayName, "key", storeKey)
 		return index, nil
 	}
 

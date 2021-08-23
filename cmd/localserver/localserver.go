@@ -28,13 +28,14 @@ func main() {
 	var (
 		addr                = flag.String("addr", defaultAddr, "HTTP address")
 		spotifyRedirectHost = flag.String("spotify-redirect-host", defaultSpotifyRedirectHost, "Spotify redirect host")
+		logLevel            = flag.String("log-level", logging.LevelInfo.String(), "log level")
 
 		clientID     = envString("SPOTIFY_ID", "")
 		clientSecret = envString("SPOTIFY_SECRET", "")
 	)
 	flag.Parse()
 
-	log := logging.New(logging.LevelInfo, logging.FormatConsolePretty)
+	log := logging.New(logging.GetLevelByName(*logLevel), logging.FormatConsolePretty)
 	// nolint errcheck
 	defer log.Sync()
 
@@ -55,10 +56,13 @@ func main() {
 	r.Method(http.MethodGet, "/metrics", promhttp.Handler())
 
 	authAdaptor := recommendations.NewSpotifyAuthAdaptor(clientID, clientSecret, *redirectURL, log)
+
+	serviceCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), keyvaluestore.JSONDiskStore("/Users/kristofferostlund/.recommendli/recommendations/cache"))
+	spotifyCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), keyvaluestore.JSONDiskStore("/Users/kristofferostlund/.recommendli/recommendations/spotify-provider"))
 	r.Get(authAdaptor.Path(), authAdaptor.TokenCallbackHandler())
 	r.Mount("/recommendations", recommendations.NewRouter(
-		recommendations.NewServiceFactory(log, keyvaluestore.JSONDiskStore("/Users/kristofferostlund/.recommendli/recommendations/cache"), recommendations.NewDummyUserPreferenceProvider()),
-		recommendations.NewSpotifyProviderFactory(log, keyvaluestore.JSONDiskStore("/Users/kristofferostlund/.recommendli/recommendations/spotify-provider")),
+		recommendations.NewServiceFactory(log, serviceCache, recommendations.NewDummyUserPreferenceProvider()),
+		recommendations.NewSpotifyProviderFactory(log, spotifyCache),
 		authAdaptor,
 		log,
 	))
