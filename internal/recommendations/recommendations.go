@@ -202,7 +202,15 @@ func (s *Service) CheckPlayingTrackInLibrary(ctx context.Context) (spotify.FullT
 	return currentTrack, nil, nil
 }
 
-func (s *Service) GenerateDiscoveryPlaylist(ctx context.Context) (spotify.FullPlaylist, error) {
+func (s *Service) CreateDiscoveryPlaylist(ctx context.Context) (spotify.FullPlaylist, error) {
+	return s.generateDiscoveryPlaylist(ctx, false)
+}
+
+func (s *Service) DryRunDiscoveryPlaylist(ctx context.Context) (spotify.FullPlaylist, error) {
+	return s.generateDiscoveryPlaylist(ctx, true)
+}
+
+func (s *Service) generateDiscoveryPlaylist(ctx context.Context, dryRun bool) (spotify.FullPlaylist, error) {
 	usr, err := s.GetCurrentUser(ctx)
 	if err != nil {
 		return spotify.FullPlaylist{}, err
@@ -243,22 +251,23 @@ func (s *Service) GenerateDiscoveryPlaylist(ctx context.Context) (spotify.FullPl
 	sort.SliceStable(scores, func(i, j int) bool {
 		return scores[i].calculate(prefs) < scores[j].calculate(prefs)
 	})
-	trackIDs := make([]string, 0)
+	tracks := make([]spotify.FullTrack, 0)
 	for _, s := range scores {
 		if s.keep(prefs) {
-			trackIDs = append(trackIDs, s.track.ID.String())
+			tracks = append(tracks, s.track)
 		}
 	}
 
 	playlistName := prefs.RecommendationPlaylistName("discovery", time.Now())
-	playlist, err := s.upsertPlaylistByName(ctx, playlists, usr.ID, playlistName, trackIDs)
+	if dryRun {
+		dummy := dummyPlaylistFor(playlistName, tracks)
+		s.log.Info("recommendation complete, not creating playlist", "dryrun", dryRun, "playlist", dummy.Name, "tracks", printableTracks(tracksOf(dummy)), "track count", dummy.Tracks.Total)
+		return dummy, nil
+	}
+	playlist, err := s.upsertPlaylistByName(ctx, playlists, usr.ID, playlistName, trackIDsOf(tracks))
 	if err != nil {
 		return spotify.FullPlaylist{}, fmt.Errorf("setting discovery playlist %s for user %s: %w", playlistName, usr.ID, err)
 	}
-	playlistTracks := make([]string, 0)
-	for _, t := range playlist.Tracks.Tracks {
-		playlistTracks = append(playlistTracks, printableTrack(t.Track))
-	}
-	s.log.Info("recommendation complete", "playlist", playlist.Name, "tracks", playlistTracks, "track count", playlist.Tracks.Total)
+	s.log.Info("recommendation complete", "playlist", playlist.Name, "tracks", printableTracks(tracksOf(playlist)), "track count", playlist.Tracks.Total)
 	return playlist, nil
 }

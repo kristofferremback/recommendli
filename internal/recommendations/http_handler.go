@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 
 	"github.com/go-chi/chi"
 	"github.com/kristofferostlund/recommendli/pkg/logging"
@@ -147,7 +148,16 @@ func (h *httpHandler) checkCurrentTrackInLibrary(svc *Service) http.HandlerFunc 
 
 func (h *httpHandler) generateDiscoveryPlaylist(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		playlist, err := svc.GenerateDiscoveryPlaylist(r.Context())
+		var playlist spotify.FullPlaylist
+		var err error
+
+		dryRunStr := strings.ToLower(r.URL.Query().Get("dryrun"))
+		if dryRunStr == "true" {
+			playlist, err = svc.DryRunDiscoveryPlaylist(r.Context())
+		} else {
+			playlist, err = svc.CreateDiscoveryPlaylist(r.Context())
+		}
+
 		if err != nil {
 			h.log.Error("generating discovery playlist", err)
 			srv.InternalServerError(w)

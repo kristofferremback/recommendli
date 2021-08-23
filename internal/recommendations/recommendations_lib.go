@@ -173,6 +173,22 @@ func (s *Service) upsertPlaylistByName(ctx context.Context, existingPlaylists []
 	return s.spotify.CreatePlaylist(ctx, userID, playlistName, trackIDs)
 }
 
+func dummyPlaylistFor(name string, tracks []spotify.FullTrack) spotify.FullPlaylist {
+	pl := spotify.FullPlaylist{
+		SimplePlaylist: spotify.SimplePlaylist{
+			Name: fmt.Sprintf("dummy: %s", name),
+			Tracks: spotify.PlaylistTracks{
+				Total: uint(len(tracks)),
+			},
+		},
+	}
+	pl.Tracks.Total = len(tracks)
+	for _, t := range tracks {
+		pl.Tracks.Tracks = append(pl.Tracks.Tracks, spotify.PlaylistTrack{Track: t})
+	}
+	return pl
+}
+
 func filterSimplePlaylist(playlists []spotify.SimplePlaylist, pred func(p spotify.SimplePlaylist) bool) []spotify.SimplePlaylist {
 	filtered := make([]spotify.SimplePlaylist, 0)
 	for _, p := range playlists {
@@ -195,11 +211,25 @@ func stringsContain(ss []string, v string) bool {
 func tracksFor(playlists []spotify.FullPlaylist) []spotify.FullTrack {
 	tracks := make([]spotify.FullTrack, 0)
 	for _, p := range playlists {
-		for _, t := range p.Tracks.Tracks {
-			tracks = append(tracks, t.Track)
-		}
+		tracks = append(tracks, tracksOf(p)...)
 	}
 	return tracks
+}
+
+func tracksOf(p spotify.FullPlaylist) []spotify.FullTrack {
+	tracks := make([]spotify.FullTrack, 0)
+	for _, t := range p.Tracks.Tracks {
+		tracks = append(tracks, t.Track)
+	}
+	return tracks
+}
+
+func trackIDsOf(tracks []spotify.FullTrack) []string {
+	trackIDs := make([]string, 0)
+	for _, t := range tracks {
+		trackIDs = append(trackIDs, t.ID.String())
+	}
+	return trackIDs
 }
 
 func stringifyTrack(t spotify.FullTrack) string {
@@ -214,6 +244,14 @@ func stringifyTrack(t spotify.FullTrack) string {
 
 func printableTrack(t spotify.FullTrack) string {
 	return fmt.Sprintf("%s - %s", t.URI, stringifyTrack(t))
+}
+
+func printableTracks(tracks []spotify.FullTrack) []string {
+	printable := make([]string, 0)
+	for _, t := range tracks {
+		printable = append(printable, printableTrack(t))
+	}
+	return printable
 }
 
 func uniqueTracks(tracks []spotify.FullTrack) []spotify.FullTrack {
