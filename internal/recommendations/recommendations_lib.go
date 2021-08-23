@@ -120,7 +120,7 @@ func (s *Service) trackAndAlbum(ctx context.Context, track spotify.FullTrack) (s
 	return track, album, nil
 }
 
-func (s *Service) scoreTracks(ctx context.Context, tracks []spotify.FullTrack) ([]score, error) {
+func (s *Service) scoreTracks(ctx context.Context, tracks []spotify.FullTrack, artistTrackCounts map[string]int) ([]score, error) {
 	type indexAndTrack struct {
 		index  int
 		scores []score
@@ -142,7 +142,11 @@ func (s *Service) scoreTracks(ctx context.Context, tracks []spotify.FullTrack) (
 				if err != nil {
 					return nil, err
 				}
-				scores = append(scores, score{track: track, album: album})
+				artistRelevace := 0
+				for _, a := range track.Artists {
+					artistRelevace += artistTrackCounts[a.Name]
+				}
+				scores = append(scores, score{track: track, album: album, artistRelevace: artistRelevace})
 			}
 			s.log.Debug("getting most relevant tracks", "total count", len(tracks), "batch size", to-from, "from", from, "to", to)
 			trackChan <- indexAndTrack{i, scores}
@@ -171,6 +175,24 @@ func (s *Service) upsertPlaylistByName(ctx context.Context, existingPlaylists []
 		}
 	}
 	return s.spotify.CreatePlaylist(ctx, userID, playlistName, trackIDs)
+}
+
+func simpleTrackMapToSlice(trackMap map[string]spotify.SimpleTrack) []spotify.SimpleTrack {
+	tracks := make([]spotify.SimpleTrack, 0)
+	for _, t := range trackMap {
+		tracks = append(tracks, t)
+	}
+	return tracks
+}
+
+func countArtistTracks(tracks []spotify.SimpleTrack) map[string]int {
+	artistTrackCounts := make(map[string]int)
+	for _, t := range tracks {
+		for _, a := range t.Artists {
+			artistTrackCounts[a.Name] += 1
+		}
+	}
+	return artistTrackCounts
 }
 
 func dummyPlaylistFor(name string, tracks []spotify.FullTrack) spotify.FullPlaylist {

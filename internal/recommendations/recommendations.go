@@ -78,8 +78,9 @@ type Service struct {
 }
 
 type score struct {
-	track spotify.FullTrack
-	album spotify.FullAlbum
+	track          spotify.FullTrack
+	album          spotify.FullAlbum
+	artistRelevace int
 }
 
 func (s score) keep(prefs UserPreferences) bool {
@@ -93,7 +94,7 @@ func (s score) calculate(prefs UserPreferences) int {
 			value += penalty
 		}
 	}
-	return value + s.album.ReleaseDateTime().Year() - 2000
+	return value + s.artistRelevace + s.album.ReleaseDateTime().Year() - 2000
 }
 
 func (s *Service) ListPlaylistsForCurrentUser(ctx context.Context) ([]spotify.SimplePlaylist, error) {
@@ -241,9 +242,10 @@ func (s *Service) generateDiscoveryPlaylist(ctx context.Context, dryRun bool) (s
 	if err != nil {
 		return spotify.FullPlaylist{}, fmt.Errorf("populating discovery playlists when generating discovery playlist: %w", err)
 	}
-	scores, err := s.scoreTracks(ctx, filterTracks(uniqueTracks(tracksFor(populatedDiscovery)), func(t spotify.FullTrack) bool {
+	candidates := filterTracks(uniqueTracks(tracksFor(populatedDiscovery)), func(t spotify.FullTrack) bool {
 		return !indexedLibrary.Has(t)
-	}))
+	})
+	scores, err := s.scoreTracks(ctx, candidates, countArtistTracks(simpleTrackMapToSlice(indexedLibrary.Tracks)))
 	if err != nil {
 		return spotify.FullPlaylist{}, fmt.Errorf("getting most relevant versions of tracks when generating discovery playlist: %w", err)
 	}
