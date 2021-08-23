@@ -9,14 +9,16 @@ import (
 )
 
 type TrackPlaylistIndex struct {
-	Playlists map[string]spotify.SimplePlaylist
-	Tracks    map[string][]string
+	Playlists          map[string]spotify.SimplePlaylist
+	TrackPlaylistIndex map[string][]string
+	Tracks             map[string]spotify.SimpleTrack
 }
 
 func NewTrackPlaylistIndexFromFullPlaylists(playlists []spotify.FullPlaylist) *TrackPlaylistIndex {
 	index := &TrackPlaylistIndex{
-		Playlists: make(map[string]spotify.SimplePlaylist),
-		Tracks:    make(map[string][]string),
+		Playlists:          make(map[string]spotify.SimplePlaylist),
+		TrackPlaylistIndex: make(map[string][]string),
+		Tracks:             make(map[string]spotify.SimpleTrack),
 	}
 	for _, p := range playlists {
 		for _, t := range p.Tracks.Tracks {
@@ -37,14 +39,15 @@ func (t *TrackPlaylistIndex) Key(tt spotify.FullTrack) string {
 }
 
 func (t *TrackPlaylistIndex) Add(tt spotify.FullTrack, p spotify.SimplePlaylist) {
-	t.Tracks[t.Key(tt)] = append(t.Tracks[t.Key(tt)], p.ID.String())
+	t.TrackPlaylistIndex[t.Key(tt)] = append(t.TrackPlaylistIndex[t.Key(tt)], p.ID.String())
+	t.Tracks[t.Key(tt)] = tt.SimpleTrack
 	if _, exists := t.Playlists[p.ID.String()]; !exists {
 		t.Playlists[p.ID.String()] = p
 	}
 }
 
 func (t *TrackPlaylistIndex) Lookup(tt spotify.FullTrack) ([]spotify.SimplePlaylist, bool) {
-	playlistIDs, ok := t.Tracks[t.Key(tt)]
+	playlistIDs, ok := t.TrackPlaylistIndex[t.Key(tt)]
 	playlists := make([]spotify.SimplePlaylist, 0, len(playlistIDs))
 	for _, id := range playlistIDs {
 		playlists = append(playlists, t.Playlists[id])
@@ -53,7 +56,7 @@ func (t *TrackPlaylistIndex) Lookup(tt spotify.FullTrack) ([]spotify.SimplePlayl
 }
 
 func (t *TrackPlaylistIndex) Has(tt spotify.FullTrack) bool {
-	_, ok := t.Tracks[t.Key(tt)]
+	_, ok := t.TrackPlaylistIndex[t.Key(tt)]
 	return ok
 }
 
