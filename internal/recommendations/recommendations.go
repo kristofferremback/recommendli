@@ -94,7 +94,7 @@ func (s score) calculate(prefs UserPreferences) int {
 			value += penalty
 		}
 	}
-	return value + s.artistRelevace + s.album.ReleaseDateTime().Year() - 2000
+	return value + s.artistRelevace + s.album.ReleaseDateTime().Year() - 2000 + s.album.Tracks.Total
 }
 
 func (s *Service) ListPlaylistsForCurrentUser(ctx context.Context) ([]spotify.SimplePlaylist, error) {
@@ -195,11 +195,11 @@ func (s *Service) CheckPlayingTrackInLibrary(ctx context.Context) (spotify.FullT
 		for _, p := range pls {
 			playlistNames = append(playlistNames, p.Name)
 		}
-		s.log.Info("current track already in library", "track", stringifyTrack(currentTrack), "playlists", playlistNames)
+		s.log.Info("current track already in library", "track", stringifyTrack(currentTrack.SimpleTrack), "playlists", playlistNames)
 		return currentTrack, pls, nil
 	}
 
-	s.log.Info("current track is new", "track", stringifyTrack(currentTrack))
+	s.log.Info("current track is new", "track", stringifyTrack(currentTrack.SimpleTrack))
 	return currentTrack, nil, nil
 }
 
@@ -251,7 +251,7 @@ func (s *Service) generateDiscoveryPlaylist(ctx context.Context, dryRun bool) (s
 	}
 
 	sort.SliceStable(scores, func(i, j int) bool {
-		return scores[i].calculate(prefs) < scores[j].calculate(prefs)
+		return scores[i].calculate(prefs) > scores[j].calculate(prefs)
 	})
 	tracks := make([]spotify.FullTrack, 0)
 	for _, s := range scores {

@@ -91,7 +91,12 @@ func (s *Service) albumForTrack(ctx context.Context, track spotify.FullTrack) (s
 
 	for _, a := range albums {
 		for _, t := range a.Tracks.Tracks {
-			if t.Name == track.Name {
+			// Using this, we don't consider a track with differing artists to be the same track.
+			// Example:
+			// - https://open.spotify.com/track/4EllS6NXwCOggtnnBqByNd?si=c67438dea8264191 (Warrior by Atreyu, Travis Barker)
+			// - https://open.spotify.com/track/0KBRMpZVUTxrU8blRUBfm3?si=567abdce7f174e88 (Warrior by Atreyo, Zero 9:36, Travis Barker)
+			// Only checking by name the above two tracks match, however the second track is in fact a different track.
+			if stringifyTrack(t) == stringifyTrack(track.SimpleTrack) {
 				return a, nil
 			}
 		}
@@ -254,7 +259,7 @@ func trackIDsOf(tracks []spotify.FullTrack) []string {
 	return trackIDs
 }
 
-func stringifyTrack(t spotify.FullTrack) string {
+func stringifyTrack(t spotify.SimpleTrack) string {
 	artistNames := make([]string, 0, len(t.Artists))
 	for _, a := range t.Artists {
 		artistNames = append(artistNames, a.Name)
@@ -264,14 +269,14 @@ func stringifyTrack(t spotify.FullTrack) string {
 	return fmt.Sprintf("%s - %s", t.Name, strings.Join(artistNames, ", "))
 }
 
-func printableTrack(t spotify.FullTrack) string {
+func printableTrack(t spotify.SimpleTrack) string {
 	return fmt.Sprintf("%s - %s", t.URI, stringifyTrack(t))
 }
 
 func printableTracks(tracks []spotify.FullTrack) []string {
 	printable := make([]string, 0)
 	for _, t := range tracks {
-		printable = append(printable, printableTrack(t))
+		printable = append(printable, printableTrack(t.SimpleTrack))
 	}
 	return printable
 }
@@ -280,8 +285,8 @@ func uniqueTracks(tracks []spotify.FullTrack) []spotify.FullTrack {
 	seen := make(map[string]struct{})
 	unique := make([]spotify.FullTrack, 0)
 	for _, t := range tracks {
-		if _, isSeen := seen[stringifyTrack(t)]; !isSeen {
-			seen[stringifyTrack(t)] = struct{}{}
+		if _, isSeen := seen[stringifyTrack(t.SimpleTrack)]; !isSeen {
+			seen[stringifyTrack(t.SimpleTrack)] = struct{}{}
 			unique = append(unique, t)
 		}
 	}
