@@ -158,6 +158,10 @@ func (s *Service) GetCurrentlyPlayingTrackAlbum(ctx context.Context) (spotify.Fu
 	return s.albumForTrack(ctx, currentTrack)
 }
 
+func (s *Service) GetCurrentTrack(ctx context.Context) (spotify.FullTrack, bool, error) {
+	return s.spotify.CurrentTrack(ctx)
+}
+
 func (s *Service) CheckPlayingTrackInLibrary(ctx context.Context) (spotify.FullTrack, []spotify.SimplePlaylist, error) {
 	usr, err := s.GetCurrentUser(ctx)
 	if err != nil {

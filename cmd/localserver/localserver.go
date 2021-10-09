@@ -15,6 +15,7 @@ import (
 	"github.com/kristofferostlund/recommendli/internal/recommendations"
 	"github.com/kristofferostlund/recommendli/pkg/keyvaluestore"
 	"github.com/kristofferostlund/recommendli/pkg/logging"
+	"github.com/kristofferostlund/recommendli/pkg/srv"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -45,6 +46,12 @@ func main() {
 		log.Fatal("Could not parse redirect URL", err, "spotifyRedirectSpotifyURL", spotifyRedirectURLstr)
 	}
 
+	uiRedirectURLstr := fmt.Sprintf("%s/recommendations/v1/spotify/auth/ui-redirect", *spotifyRedirectHost)
+	uiRedirectURL, err := url.Parse(uiRedirectURLstr)
+	if err != nil {
+		log.Fatal("Could not parse redirect URL", err, "spotifyRedirectSpotifyURL", spotifyRedirectURLstr)
+	}
+
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
@@ -55,17 +62,15 @@ func main() {
 	r.Get("/status", getStatus())
 	r.Method(http.MethodGet, "/metrics", promhttp.Handler())
 
-	authAdaptor := recommendations.NewSpotifyAuthAdaptor(clientID, clientSecret, *redirectURL, log)
-
-	serviceCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), keyvaluestore.JSONDiskStore("/Users/kristofferostlund/.recommendli/recommendations/cache"))
-	spotifyCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), keyvaluestore.JSONDiskStore("/Users/kristofferostlund/.recommendli/recommendations/spotify-provider"))
+	authAdaptor := recommendations.NewSpotifyAuthAdaptor(clientID, clientSecret, *redirectURL, *uiRedirectURL, log)
 	r.Get(authAdaptor.Path(), authAdaptor.TokenCallbackHandler())
-	r.Mount("/recommendations", recommendations.NewRouter(
-		recommendations.NewServiceFactory(log, serviceCache, recommendations.NewDummyUserPreferenceProvider()),
-		recommendations.NewSpotifyProviderFactory(log, spotifyCache),
-		authAdaptor,
-		log,
-	))
+	r.Get(authAdaptor.UIRedirectPath(), authAdaptor.UIRedirectHandler())
+
+	recommendatinsHandler := getRecommendationsHandler(log, authAdaptor)
+	r.Mount("/recommendations", recommendatinsHandler)
+
+	fs := http.FileServer(http.Dir("./static"))
+	r.Handle("/*", srv.RedirectOn404(fs, "/index.html"))
 
 	errs := make(chan error, 2)
 	go func() {
@@ -85,6 +90,18 @@ func main() {
 	}
 
 	log.Info("Server shutdown")
+}
+
+func getRecommendationsHandler(log *logging.Log, authAdaptor *recommendations.AuthAdaptor) *chi.Mux {
+	serviceCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), keyvaluestore.JSONDiskStore("/Users/kristofferostlund/.recommendli/recommendations/cache"))
+	spotifyCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), keyvaluestore.JSONDiskStore("/Users/kristofferostlund/.recommendli/recommendations/spotify-provider"))
+	recommendatinsHandler := recommendations.NewRouter(
+		recommendations.NewServiceFactory(log, serviceCache, recommendations.NewDummyUserPreferenceProvider()),
+		recommendations.NewSpotifyProviderFactory(log, spotifyCache),
+		authAdaptor,
+		log,
+	)
+	return recommendatinsHandler
 }
 
 func envString(env, fallback string) string {

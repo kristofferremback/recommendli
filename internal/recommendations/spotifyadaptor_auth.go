@@ -31,13 +31,13 @@ const (
 var NoAuthenticationError error = errors.New("No authentication found")
 
 type AuthAdaptor struct {
-	authenticator spotify.Authenticator
-	redirectURL   url.URL
+	authenticator              spotify.Authenticator
+	redirectURL, uiRedirectURL url.URL
 
 	log logging.Logger
 }
 
-func NewSpotifyAuthAdaptor(clientID, clientSecret string, redirectURL url.URL, log logging.Logger) *AuthAdaptor {
+func NewSpotifyAuthAdaptor(clientID, clientSecret string, redirectURL, uiRedirectURL url.URL, log logging.Logger) *AuthAdaptor {
 	authenticator := spotify.NewAuthenticator(
 		redirectURL.String(),
 		spotify.ScopeUserReadPrivate,
@@ -53,12 +53,17 @@ func NewSpotifyAuthAdaptor(clientID, clientSecret string, redirectURL url.URL, l
 	return &AuthAdaptor{
 		authenticator: authenticator,
 		redirectURL:   redirectURL,
+		uiRedirectURL: uiRedirectURL,
 		log:           log,
 	}
 }
 
 func (a *AuthAdaptor) Path() string {
 	return a.redirectURL.Path
+}
+
+func (a *AuthAdaptor) UIRedirectPath() string {
+	return a.uiRedirectURL.Path
 }
 
 func (a *AuthAdaptor) TokenCallbackHandler() http.HandlerFunc {
@@ -121,6 +126,18 @@ func (a *AuthAdaptor) TokenCallbackHandler() http.HandlerFunc {
 	}
 }
 
+func (a *AuthAdaptor) UIRedirectHandler() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		redirectTo := r.URL.Query().Get("url")
+		if redirectTo == "" {
+			a.log.Warn("No url provided, cannot redirect client")
+			srv.JSONError(w, errors.New("url is a required paramter"), srv.Status(400))
+			return
+		}
+		a.redirect(w, r, redirectTo)
+	})
+}
+
 func (a *AuthAdaptor) Middleware() func(h http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -131,11 +148,11 @@ func (a *AuthAdaptor) Middleware() func(h http.Handler) http.Handler {
 				err := json.Unmarshal(decoded, token)
 				if err != nil {
 					a.log.Warn("Failed to unmarshal token", "error", err)
-					a.redirect(w, r)
+					a.redirect(w, r, r.URL.String())
 					return
 				}
 				if !token.Valid() {
-					a.redirect(w, r)
+					a.redirect(w, r, r.URL.String())
 					return
 				}
 
@@ -144,7 +161,7 @@ func (a *AuthAdaptor) Middleware() func(h http.Handler) http.Handler {
 				return
 			}
 
-			a.redirect(w, r)
+			a.redirect(w, r, r.URL.String())
 		})
 	}
 }
@@ -159,7 +176,7 @@ func (a *AuthAdaptor) GetClient(r *http.Request) (spotify.Client, error) {
 	return client, nil
 }
 
-func (a *AuthAdaptor) redirect(w http.ResponseWriter, r *http.Request) {
+func (a *AuthAdaptor) redirect(w http.ResponseWriter, r *http.Request, redirectBackTo string) {
 	state := uuid.NewV4().String()
 
 	http.SetCookie(w, &http.Cookie{
@@ -175,7 +192,7 @@ func (a *AuthAdaptor) redirect(w http.ResponseWriter, r *http.Request) {
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     CookieGoto,
-		Value:    url.QueryEscape(r.URL.String()),
+		Value:    url.QueryEscape(redirectBackTo),
 		Expires:  time.Now().Add(time.Hour),
 		Path:     "/",
 		Secure:   true,
