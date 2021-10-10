@@ -3,7 +3,7 @@
  * @param {RequestInit} [init]
  * @returns Promise<Response>
  */
-const redirectingFetch = async (input, init = {}) => {
+export const redirectingFetch = async (input, init = {}) => {
   const response = await fetch(input, { ...init, redirect: 'manual' })
   if (response.type === 'opaqueredirect') {
     location.replace(
@@ -13,4 +13,21 @@ const redirectingFetch = async (input, init = {}) => {
   return response
 }
 
-export default redirectingFetch
+/**
+ * @param {Promise<Response>} promise
+ * @returns Promise<Response>
+ */
+export const throwOn404 = async (promise) => {
+  const response = await promise
+  if (response.status < 400) {
+    return response
+  }
+
+  const error = new Error(`Unexpected status ${response.status} - ${response.statusText}`)
+  if (response.headers.get('content-type') === 'application/json') {
+    const body = await response.json()
+    // @ts-ignore
+    error.body = body
+  }
+  throw error
+}

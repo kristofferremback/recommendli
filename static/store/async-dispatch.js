@@ -2,10 +2,9 @@
  * @typedef action
  * @property {string} type
  * @property {any} payload
- */
-
-/**
- * @typedef {(action) => void} dispatchFunc
+ *
+ * @typedef {(...args: any) => action} actionFunc
+ * @typedef {(action: action) => void} dispatchFunc
  */
 
 /**
@@ -22,8 +21,6 @@
  * @template T
  * @typedef {(dispatch: dispatchFunc, getState: getStateFunc<T>) => Promise} asyncThunk
  */
-
-const isPromise = (v) => v && typeof v.then === 'function' && typeof v.catch === 'function'
 
 /**
  * @template State
