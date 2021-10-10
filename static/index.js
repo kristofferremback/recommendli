@@ -1,12 +1,4 @@
-import {
-  html,
-  Component,
-  render,
-  useState,
-  useMemo,
-  createContext,
-  useReducer,
-} from 'https://unpkg.com/htm/preact/standalone.module.js'
+import { html, render, useMemo, useReducer } from 'https://unpkg.com/htm/preact/standalone.module.js'
 
 import App from './app.js'
 
