@@ -17,7 +17,7 @@ const App = () => {
     if (state.user != null) {
       dispatch(getCurrentTrackAsync())
       // Perhaps do something better than setInterval here?
-      timerHandle = setInterval(() => dispatch(getCurrentTrackAsync()), 5000)
+      timerHandle = setInterval(() => dispatch(getCurrentTrackAsync()), 2000)
     }
 
     return () => {
@@ -26,10 +26,6 @@ const App = () => {
       }
     }
   }, [state.user])
-
-  useEffect(() => {})
-
-  const { user, currentTrack } = state
 
   return html`
     <div class="app">
