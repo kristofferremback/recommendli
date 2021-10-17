@@ -1,14 +1,14 @@
+// @ts-ignore
 import { html, render, useMemo, useReducer } from 'https://unpkg.com/htm/preact/standalone.module.js'
 
 import App from './app.js'
 
 import { StoreContext, globalReducer, initialState } from './store/store.js'
-import useAsyncDispatch from './store/async-dispatch.js'
+import useAsyncDispatch from './store/lib/async-dispatch.js'
 
 const AppContainer = () => {
   const [state, dispatch] = useReducer(globalReducer, initialState)
-  const getState = () => state
-  const asyncDispatch = useAsyncDispatch(dispatch, getState)
+  const asyncDispatch = useAsyncDispatch(dispatch, () => state)
 
   const contextValue = useMemo(() => ({ state, dispatch: asyncDispatch }), [state, asyncDispatch])
 

@@ -9,6 +9,11 @@
 
 /**
  * @template T
+ * @typedef {((input: action | thunk<T> | asyncThunk<T>) => void)} asyncDispatchFunc
+ */
+
+/**
+ * @template T
  * @typedef {() => T} getStateFunc
  */
 

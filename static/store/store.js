@@ -1,33 +1,55 @@
+// @ts-ignore
 import { createContext } from 'https://unpkg.com/htm/preact/standalone.module.js'
-
-import { types } from './user.js'
+import { combineReducers } from './lib/combine-reducers.js'
+import * as currentTrackReducer from './current-track/current-track.reducer.js'
+import * as userReducer from './user/user.reducer.js'
+import * as windowReducer from './window/window.reducer.js'
 
 export const StoreContext = createContext()
 
-export const initialState = {
-  user: null,
-  userFetch: {
-    state: 'idle',
-    error: null,
+const reducerMappings = {
+  user: {
+    initialState: userReducer.initialState,
+    reducer: userReducer.reducer,
   },
-  currentTrack: null,
-  currentTrackFetch: {
-    state: 'idle',
-    error: null,
+  currentTrack: {
+    initialState: currentTrackReducer.initialState,
+    reducer: currentTrackReducer.reducer,
+  },
+  window: {
+    initialState: windowReducer.initialState,
+    reducer: windowReducer.reducer,
   },
 }
 
-export const globalReducer = (state = initialState, { type, payload }) => {
-  switch (type) {
-    case types.SET_CURRENT_USER:
-      return { ...state, user: payload }
-    case types.SET_CURRENT_USER_FETCH_STATE:
-      return { ...state, userFetch: payload }
-    case types.SET_CURRENT_TRACK:
-      return { ...state, currentTrack: payload }
-    case types.SET_CURRENT_TRACK_FETCH_STATE:
-      return { ...state, currentTrackFetch: payload }
-    default:
-      return state
-  }
+/**
+ * "Clever" way of creating both combined reducers and combine initial state
+ *
+ * @typedef {typeof reducerMappings} mapping
+ * @typedef {keyof mapping} keys
+ *
+ * @typedef {{ [key in keys]: mapping[key]['reducer'] }} reducers
+ * @typedef {{ [key in keys]: mapping[key]['initialState'] }} initialState
+ *
+ * @param {typeof reducerMappings} mappings
+ * @returns {{ reducers: reducers, initialState: initialState } }}
+ */
+const combine = (mappings) => {
+  // @ts-ignore
+  return Object.entries(mappings).reduce(
+    ({ reducers, initialState }, [key, { reducer, initialState: initState }]) => ({
+      reducers: { ...reducers, [key]: reducer },
+      initialState: { ...initialState, [key]: initState },
+    }),
+    {
+      reducers: {},
+      initialState: {},
+    }
+  )
 }
+
+const combined = combine(reducerMappings)
+
+export const initialState = combined.initialState
+
+export const globalReducer = combineReducers(combined.reducers)
