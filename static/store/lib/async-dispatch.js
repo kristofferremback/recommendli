@@ -33,7 +33,7 @@
  * @param {dispatchFunc} dispatch
  * @param {getStateFunc<State>} getState
  */
-const useAsyncDispatch = (dispatch, getState) => {
+const withAsyncDispatch = (dispatch, getState) => {
   /**
    * @param {action|thunk<State>|asyncThunk<State>} input
    */
@@ -48,4 +48,4 @@ const useAsyncDispatch = (dispatch, getState) => {
   return asyncDispatch
 }
 
-export default useAsyncDispatch
+export default withAsyncDispatch

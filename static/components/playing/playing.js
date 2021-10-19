@@ -12,7 +12,7 @@ const formatArtists = (artists) => artists.map((a) => a.name).join(', ')
  * @param {{ name: string }} opts.track.album
  * @param {{ name: string }[]} opts.track.artists
  */
-const NowPlaying = ({ track, ...props }) => {
+const NowPlaying = ({ track }) => {
   const { name, artistNames, albumName } = useMemo(
     () => ({
       name: track.name,

@@ -1,5 +1,5 @@
 // @ts-ignore
-import { html, useContext, useEffect, useState } from 'https://unpkg.com/htm/preact/standalone.module.js'
+import { html, useContext, useEffect, useCallback } from 'https://unpkg.com/htm/preact/standalone.module.js'
 import { getCurrentUserAsync } from './store/user/user.actions.js'
 import { getCurrentTrackAsync } from './store/current-track/current-track.actions.js'
 import { setVisibilityState } from './store/window/window.actions.js'
@@ -8,6 +8,10 @@ import { StoreContext } from './store/store.js'
 
 import Playing from './components/playing/playing.js'
 import { selectIsVisible } from './store/window/window.selectors.js'
+import usePolling from './hooks/use-polling.js'
+import { selectCurrentUser } from './store/user/user.selectors.js'
+import useEventListener from './hooks/use-event-listener.js'
+import { selectIsPlaying, selectTrack } from './store/current-track/current-track.selectors.js'
 
 const App = () => {
   /**
@@ -17,54 +21,28 @@ const App = () => {
    * @type {{ state: State, dispatch: asyncDispatchFunc }}
    */
   const { state, dispatch } = useContext(StoreContext)
+
   const isVisible = selectIsVisible(state)
+  const currentUser = selectCurrentUser(state)
+  const isPlaying = selectIsPlaying(state)
+  const track = selectTrack(state)
 
   useEffect(() => {
-    if (state.user == null && state.user.fetchState.state === 'idle') {
+    if (currentUser == null && state.user.fetchState.state === 'idle') {
       dispatch(getCurrentUserAsync())
     }
-  }, [state.user, state.user.fetchState.state])
+  }, [currentUser, state.user.fetchState.state])
 
-  useEffect(() => {
-    const eventListeners = { visibilitychange: () => dispatch(setVisibilityState(document.visibilityState)) }
-    for (const [event, listener] of Object.entries(eventListeners)) {
-      document.addEventListener(event, listener)
-    }
+  const onVisibilityChange = useCallback(() => dispatch(setVisibilityState(document.visibilityState)), [])
+  useEventListener('visibilitychange', onVisibilityChange)
 
-    return () => {
-      for (const [event, listener] of Object.entries(eventListeners)) {
-        document.removeEventListener(event, listener)
-      }
-    }
-  }, [])
-
-  useEffect(() => {
-    const timers = new Set()
-
-    const startPolling = () => {
-      dispatch(getCurrentTrackAsync())
-      timers.add(setInterval(() => dispatch(getCurrentTrackAsync()), 2000))
-    }
-    const cleanup = () => {
-      for (const timerHandle of timers.values()) {
-        timers.delete(timerHandle)
-        clearInterval(timerHandle)
-      }
-    }
-
-    if (isVisible && state.user != null) {
-      cleanup()
-      startPolling()
-    } else {
-      cleanup()
-    }
-
-    return cleanup
-  }, [isVisible, state.user])
+  const action = useCallback(() => dispatch(getCurrentTrackAsync()), [])
+  usePolling(action, { isActive: isVisible && currentUser != null })
 
   return html`
     <div class="app">
-      <${Playing} track=${state.currentTrack.track} isPlaying=${state.currentTrack.isPlaying} />
+      <${Playing} track=${track} isPlaying=${isPlaying} />
+      <pre>${JSON.stringify(state, null, 4)}</pre>
     </div>
   `
 }
