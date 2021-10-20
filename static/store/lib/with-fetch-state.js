@@ -1,6 +1,14 @@
+export const states = {
+  new: 'new',
+  idle: 'idle',
+  loading: 'loading',
+  error: 'error',
+}
+
 export const defaultFetchState = () => ({
-  state: 'idle',
+  state: states.new,
   error: null,
+  lastUpdatedAt: null,
 })
 
 /**
@@ -17,12 +25,22 @@ export const withFetchState = (setStateAction, actionFunc) => {
    */
   const thunk = async (dispatch, getState) => {
     try {
-      dispatch(setStateAction({ state: 'loading' }))
+      dispatch(setStateAction({ state: states.loading, lastUpdatedAt: new Date() }))
       await actionFunc(dispatch, getState)
-      dispatch(setStateAction({ state: 'idle' }))
+      dispatch(setStateAction({ state: states.idle, lastUpdatedAt: new Date() }))
     } catch (error) {
-      dispatch(setStateAction({ state: 'error', error }))
+      dispatch(setStateAction({ state: states.error, lastUpdatedAt: new Date(), error }))
     }
   }
   return thunk
+}
+
+/**
+ * @param {string} type
+ */
+export const createSetFetchState = (type) => {
+  return ({ state, lastUpdatedAt, error }) => ({
+    type,
+    payload: { state, lastUpdatedAt, error },
+  })
 }

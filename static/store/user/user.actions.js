@@ -1,5 +1,5 @@
-import { withFetchState } from '../lib/with-fetch-state.js'
-import { redirectingFetch, throwOn404 } from '../../spotify/redirecting-fetch.js'
+import { withFetchState, createSetFetchState } from '../lib/with-fetch-state.js'
+import withRecommendliClient from '../../recommendli/client.js'
 
 export const types = {
   SET_CURRENT_USER: 'SET_CURRENT_USER',
@@ -11,21 +11,14 @@ const setCurrentUser = (currentUser) => ({
   payload: currentUser,
 })
 
-/**
- * @param {object} opts
- * @param {'idle'|'loading'|'error'} opts.state
- * @param {Error} [opts.error]
- */
-const setCurrentUserFetchState = ({ state, error }) => ({
-  type: types.SET_CURRENT_USER_FETCH_STATE,
-  payload: { state, error },
-})
+const setCurrentUserFetchState = createSetFetchState(types.SET_CURRENT_USER_FETCH_STATE)
 
 export const getCurrentUserAsync = () => {
-  return withFetchState(setCurrentUserFetchState, async (dispatch) => {
-    const response = await throwOn404(redirectingFetch('/recommendations/v1/whoami'))
-    const user = await response.json()
+  return withRecommendliClient((client) => {
+    return withFetchState(setCurrentUserFetchState, async (dispatch) => {
+      const user = await client.getCurrentUser()
 
-    dispatch(setCurrentUser(user))
+      dispatch(setCurrentUser(user))
+    })
   })
 }

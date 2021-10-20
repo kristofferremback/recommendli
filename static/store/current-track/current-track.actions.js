@@ -1,5 +1,5 @@
-import { withFetchState } from '../lib/with-fetch-state.js'
-import { redirectingFetch, throwOn404 } from '../../spotify/redirecting-fetch.js'
+import { withFetchState, createSetFetchState } from '../lib/with-fetch-state.js'
+import withRecommendliClient from '../../recommendli/client.js'
 
 export const types = {
   SET_CURRENT_TRACK: 'SET_CURRENT_TRACK',
@@ -11,21 +11,14 @@ const setCurrentTrack = ({ track, isPlaying }) => ({
   payload: { track, isPlaying },
 })
 
-/**
- * @param {object} opts
- * @param {'idle'|'loading'|'error'} opts.state
- * @param {Error} [opts.error]
- */
-const setCurrentTrackFetchState = ({ state, error }) => ({
-  type: types.SET_CURRENT_TRACK_FETCH_STATE,
-  payload: { state, error },
-})
+const setCurrentTrackFetchState = createSetFetchState(types.SET_CURRENT_TRACK_FETCH_STATE)
 
 export const getCurrentTrackAsync = () => {
-  return withFetchState(setCurrentTrackFetchState, async (dispatch) => {
-    const response = await throwOn404(redirectingFetch('/recommendations/v1/current-track'))
-    const { track, is_playing: isPlaying } = await response.json()
+  return withRecommendliClient((client) => {
+    return withFetchState(setCurrentTrackFetchState, async (dispatch) => {
+      const { track, isPlaying } = await client.getCurrentTrack()
 
-    dispatch(setCurrentTrack({ isPlaying, track }))
+      dispatch(setCurrentTrack({ isPlaying, track }))
+    })
   })
 }

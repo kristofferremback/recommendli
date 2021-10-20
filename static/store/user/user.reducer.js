@@ -11,7 +11,7 @@ export const reducer = (state = initialState, { type, payload }) => {
     case types.SET_CURRENT_USER:
       return { ...state, user: payload }
     case types.SET_CURRENT_USER_FETCH_STATE:
-      return { ...state, userFetch: payload }
+      return { ...state, fetchState: payload }
     default:
       return state
   }

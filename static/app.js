@@ -12,11 +12,12 @@ import usePolling from './hooks/use-polling.js'
 import { selectCurrentUser } from './store/user/user.selectors.js'
 import useEventListener from './hooks/use-event-listener.js'
 import { selectIsPlaying, selectTrack } from './store/current-track/current-track.selectors.js'
+import { states } from './store/lib/with-fetch-state.js'
 
 const App = () => {
   /**
    * @typedef {typeof import('./store/store').initialState} State
-   * @typedef {import('./store/lib/async-dispatch').asyncDispatchFunc<any>} asyncDispatchFunc
+   * @typedef {import('./store/lib/async-dispatch').asyncDispatchFunc<State>} asyncDispatchFunc
    *
    * @type {{ state: State, dispatch: asyncDispatchFunc }}
    */
@@ -28,7 +29,7 @@ const App = () => {
   const track = selectTrack(state)
 
   useEffect(() => {
-    if (currentUser == null && state.user.fetchState.state === 'idle') {
+    if (currentUser == null && state.user.fetchState.state === states.new) {
       dispatch(getCurrentUserAsync())
     }
   }, [currentUser, state.user.fetchState.state])
