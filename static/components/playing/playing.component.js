@@ -1,43 +1,17 @@
 import { html, useMemo } from 'https://unpkg.com/htm/preact/standalone.module.js'
 
+import { SpotifyLinkable, LinkableArtists } from '../linkable/linkable-component.js'
+
 /**
- * @typedef Artist
- * @property {string} name
- * @property {{ spotify: string }} external_urls
- *
- * @typedef Album
- * @property {string} name
- * @property {{ spotify: string }} external_urls
- *
- * @typedef Track
- * @property {string} name
- * @property {Album} album
- * @property {Artist[]} artists
- * @property {{ spotify: string }} external_urls
+ * @typedef {import('../../recommendli/client').Artist} Artist
+ * @typedef {import('../../recommendli/client').Album} Album
+ * @typedef {import('../../recommendli/client').Track} Track
  */
 
 /**
  * @param {Artist[]} artists
  */
 const mapArtistNames = (artists) => artists.map((a) => a.name).join(', ')
-
-const LinkableName = ({ url, name }) => {
-  return html` <a href="${url}">${name}</a> `
-}
-
-/**
- * @param {{ artists: Artist[] }} opts
- * @returns
- */
-const LinkableArtists = ({ artists }) => {
-  return html`
-    ${artists.map((a, i, arr) => {
-      return html`<${LinkableName} name=${a.name} url=${a.external_urls.spotify} /> ${i < arr.length - 1
-          ? ','
-          : ''}`
-    })}
-  `
-}
 
 /**
  * @param {object} opts
@@ -47,7 +21,7 @@ const NowPlaying = ({ track }) => {
   const { artistNames, albumName } = useMemo(
     () => ({
       artistNames: html`<${LinkableArtists} artists=${track.artists} />`,
-      albumName: html`<${LinkableName} name=${track.album.name} url=${track.album.external_urls.spotify} />`,
+      albumName: html`<${SpotifyLinkable} item=${track.album} />`,
     }),
     [mapArtistNames(track.artists), track.album.name]
   )
@@ -78,7 +52,7 @@ const PlayingHeader = ({ isPlaying, track, title }) => {
           return html`${title}`
         }
         if (isPlaying) {
-          return html`Now playing <${LinkableName} name=${track.name} url=${track.external_urls.spotify} />`
+          return html`Now playing <${SpotifyLinkable} item=${track} />`
         }
         return html`Nothing is playing`
       })()}
@@ -94,7 +68,7 @@ const PlayingHeader = ({ isPlaying, track, title }) => {
  */
 const Playing = ({ title, isPlaying, track }) => {
   return html`
-    <article class="playing">
+    <article>
       <${PlayingHeader} isPlaying=${isPlaying} track=${track} title=${title} />
       <${isPlaying ? NowPlaying : NothingPlaying} track=${track} />
     </article>

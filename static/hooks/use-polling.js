@@ -11,7 +11,6 @@ const usePolling = (action, { isActive, interval = 2000 }) => {
 
     const cleanup = () => {
       for (const handle of timerHandles.values()) {
-        console.log('removing handle', handle)
         timerHandles.delete(handle)
         clearInterval(handle)
       }

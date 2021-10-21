@@ -16,7 +16,6 @@ const setCurrentTrackFetchState = createSetFetchState(types.SET_CURRENT_TRACK_FE
 export const getCurrentTrackAsync = () => {
   return withFetchState(setCurrentTrackFetchState, async (dispatch) => {
     const { track, isPlaying } = await recommendliClient.getCurrentTrack()
-
     dispatch(setCurrentTrack({ isPlaying, track }))
   })
 }
