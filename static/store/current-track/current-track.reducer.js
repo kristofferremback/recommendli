@@ -5,6 +5,8 @@ export const initialState = {
   track: null,
   isPlaying: false,
   fetchState: defaultFetchState(),
+  status: null,
+  statusFetchState: defaultFetchState(),
 }
 
 export const reducer = (state = initialState, { type, payload }) => {
@@ -13,6 +15,10 @@ export const reducer = (state = initialState, { type, payload }) => {
       return { ...state, track: payload.track, isPlaying: payload.isPlaying }
     case types.SET_CURRENT_TRACK_FETCH_STATE:
       return { ...state, fetchState: updateFetchState(state.fetchState, payload) }
+    case types.SET_CURRENT_TRACK_STATUS:
+      return { ...state, status: payload }
+    case types.SET_CURRENT_TRACK_STATUS_FETCH_STATE:
+      return { ...state, statusFetchState: updateFetchState(state.statusFetchState, payload) }
     default:
       return state
   }

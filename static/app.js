@@ -1,7 +1,10 @@
 // @ts-ignore
 import { html, useContext, useEffect, useCallback } from 'https://unpkg.com/htm/preact/standalone.module.js'
 import { getCurrentUserAsync } from './store/user/user.actions.js'
-import { getCurrentTrackAsync } from './store/current-track/current-track.actions.js'
+import {
+  checkCurrenTrackStatusAsync,
+  getCurrentTrackAsync,
+} from './store/current-track/current-track.actions.js'
 import { setVisibilityState } from './store/window/window.actions.js'
 
 import { StoreContext } from './store/store.js'
@@ -10,7 +13,12 @@ import { states } from './store/lib/with-fetch-state.js'
 import { selectIsVisible } from './store/window/window.selectors.js'
 import { selectCurrentUser } from './store/user/user.selectors.js'
 import useEventListener from './hooks/use-event-listener.js'
-import { selectIsPlaying, selectTrack } from './store/current-track/current-track.selectors.js'
+import {
+  selectIsPlaying,
+  selectTrack,
+  selectTrackId,
+  selectTrackInLibrary,
+} from './store/current-track/current-track.selectors.js'
 
 import usePolling from './hooks/use-polling.js'
 
@@ -22,6 +30,7 @@ import withConditionalLoading, {
 } from './components/conditional-loading/conditional-loading.component.js'
 import { generateDiscoveryPlaylistAsync } from './store/generate/generate.actions.js'
 import { selectDiscoveryIsLoading, selectDiscoveryPlaylist } from './store/generate/generate.selectors.js'
+import { useLastNonNullish } from './hooks/use-previous.js'
 
 const LoadingPlayer = withConditionalLoading(
   () => html`
@@ -42,6 +51,9 @@ const App = () => {
   const currentUser = selectCurrentUser(state)
   const isPlaying = selectIsPlaying(state)
   const track = selectTrack(state)
+  const trackId = selectTrackId(state)
+  const trackInLibrary = selectTrackInLibrary(state)
+
   const discoveryIsLoading = selectDiscoveryIsLoading(state)
   const discoveryPlaylist = selectDiscoveryPlaylist(state)
 
@@ -57,7 +69,15 @@ const App = () => {
   const pollAction = useCallback(() => dispatch(getCurrentTrackAsync()), [])
   usePolling(pollAction, { isActive: isVisible && currentUser != null })
 
-  const onGeneratePlaylist = useCallback(() => dispatch(generateDiscoveryPlaylistAsync({ dryRun: true })), [])
+  const prevTrackId = useLastNonNullish(trackId)
+  useEffect(() => {
+    if (trackId != null && trackId !== prevTrackId) {
+      // TODO: Actually somehow render the current track status
+      dispatch(checkCurrenTrackStatusAsync())
+    }
+  }, [trackId])
+
+  const onGeneratePlaylist = useCallback(() => dispatch(generateDiscoveryPlaylistAsync()), [])
 
   const isReady = [state.currentTrack.fetchState, state.user.fetchState].every(
     (s) => s.state !== states.new && s.lastResponseAt != null

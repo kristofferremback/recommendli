@@ -14,6 +14,7 @@ import { throwOn404, redirectingFetch } from './redirecting-fetch.js'
  *
  * @typedef Track
  * @property {string} name
+ * @property {string} id
  * @property {Album} album
  * @property {Artist[]} artists
  * @property {ExternalUrls} external_urls
@@ -26,6 +27,10 @@ import { throwOn404, redirectingFetch } from './redirecting-fetch.js'
  * @property {string} name
  * @property {ExternalUrls} external_urls
  * @property {Track[]} tracks
+ *
+ * @typedef SimplePlaylist
+ * @property {string} name
+ * @property {ExternalUrls} external_urls
  *
  */
 
@@ -57,6 +62,14 @@ const recommendliClient = {
       ...fullPlaylist,
       tracks: fullPlaylist.tracks.items.map((item) => item.track),
     }
+  },
+  /**
+   * @returns {Promise<{ inLibrary: boolean, track: Track, playlists: SimplePlaylist[] }>}
+   */
+  checkCurrentTrack: async () => {
+    const response = await throwOn404(redirectingFetch('/recommendations/v1/check-current-track-in-library'))
+    const { in_library: inLibrary, track, playlists } = await response.json()
+    return { inLibrary, track, playlists: playlists.map((p) => ({ ...p, tracks: undefined })) }
   },
 }
 
