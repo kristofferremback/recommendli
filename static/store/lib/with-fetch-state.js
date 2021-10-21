@@ -8,7 +8,7 @@ export const states = {
 export const defaultFetchState = () => ({
   state: states.new,
   error: null,
-  lastUpdatedAt: null,
+  lastResponseAt: null,
 })
 
 /**
@@ -25,11 +25,11 @@ export const withFetchState = (setStateAction, actionFunc) => {
    */
   const thunk = async (dispatch, getState) => {
     try {
-      dispatch(setStateAction({ state: states.loading, lastUpdatedAt: new Date() }))
+      dispatch(setStateAction({ state: states.loading }))
       await actionFunc(dispatch, getState)
-      dispatch(setStateAction({ state: states.idle, lastUpdatedAt: new Date() }))
+      dispatch(setStateAction({ state: states.idle, lastResponseAt: new Date() }))
     } catch (error) {
-      dispatch(setStateAction({ state: states.error, lastUpdatedAt: new Date(), error }))
+      dispatch(setStateAction({ state: states.error, lastResponseAt: new Date(), error }))
     }
   }
   return thunk
@@ -39,8 +39,12 @@ export const withFetchState = (setStateAction, actionFunc) => {
  * @param {string} type
  */
 export const createSetFetchState = (type) => {
-  return ({ state, lastUpdatedAt, error }) => ({
+  return ({ state, lastResponseAt, error }) => ({
     type,
-    payload: { state, lastUpdatedAt, error },
+    payload: { state, lastResponseAt, error },
   })
+}
+
+export const updateFetchState = (prev, next) => {
+  return { ...next, lastResponseAt: next.lastResponseAt || prev.lastResponseAt }
 }

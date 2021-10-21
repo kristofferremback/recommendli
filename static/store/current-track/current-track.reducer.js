@@ -1,4 +1,4 @@
-import { defaultFetchState } from '../lib/with-fetch-state.js'
+import { defaultFetchState, updateFetchState } from '../lib/with-fetch-state.js'
 import { types } from './current-track.actions.js'
 
 export const initialState = {
@@ -12,7 +12,7 @@ export const reducer = (state = initialState, { type, payload }) => {
     case types.SET_CURRENT_TRACK:
       return { ...state, track: payload.track, isPlaying: payload.isPlaying }
     case types.SET_CURRENT_TRACK_FETCH_STATE:
-      return { ...state, fetchState: payload }
+      return { ...state, fetchState: updateFetchState(state.fetchState, payload) }
     default:
       return state
   }

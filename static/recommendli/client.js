@@ -12,11 +12,4 @@ const recommendliClient = {
   },
 }
 
-/**
- *
- * @template T
- * @param {(client: typeof recommendliClient) => T} func
- */
-const withRecommendliClient = (func) => func(recommendliClient)
-
-export default withRecommendliClient
+export default recommendliClient

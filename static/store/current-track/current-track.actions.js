@@ -1,5 +1,5 @@
 import { withFetchState, createSetFetchState } from '../lib/with-fetch-state.js'
-import withRecommendliClient from '../../recommendli/client.js'
+import recommendliClient from '../../recommendli/client.js'
 
 export const types = {
   SET_CURRENT_TRACK: 'SET_CURRENT_TRACK',
@@ -14,11 +14,9 @@ const setCurrentTrack = ({ track, isPlaying }) => ({
 const setCurrentTrackFetchState = createSetFetchState(types.SET_CURRENT_TRACK_FETCH_STATE)
 
 export const getCurrentTrackAsync = () => {
-  return withRecommendliClient((client) => {
-    return withFetchState(setCurrentTrackFetchState, async (dispatch) => {
-      const { track, isPlaying } = await client.getCurrentTrack()
+  return withFetchState(setCurrentTrackFetchState, async (dispatch) => {
+    const { track, isPlaying } = await recommendliClient.getCurrentTrack()
 
-      dispatch(setCurrentTrack({ isPlaying, track }))
-    })
+    dispatch(setCurrentTrack({ isPlaying, track }))
   })
 }

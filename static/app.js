@@ -6,13 +6,24 @@ import { setVisibilityState } from './store/window/window.actions.js'
 
 import { StoreContext } from './store/store.js'
 
-import Playing from './components/playing/playing.js'
+import { states } from './store/lib/with-fetch-state.js'
 import { selectIsVisible } from './store/window/window.selectors.js'
-import usePolling from './hooks/use-polling.js'
 import { selectCurrentUser } from './store/user/user.selectors.js'
 import useEventListener from './hooks/use-event-listener.js'
 import { selectIsPlaying, selectTrack } from './store/current-track/current-track.selectors.js'
-import { states } from './store/lib/with-fetch-state.js'
+
+import usePolling from './hooks/use-polling.js'
+
+import Playing from './components/playing/playing.component.js'
+import withConditionalLoading, {
+  LoadingText,
+} from './components/conditional-loading/conditional-loading.component.js'
+
+const LoadingPlayer = withConditionalLoading(
+  () => html`
+    <${Playing} isPlaying=${false} title=${html`<${LoadingText}>Player state loading</${LoadingText}>`} />
+  `
+)
 
 const App = () => {
   /**
@@ -40,9 +51,22 @@ const App = () => {
   const action = useCallback(() => dispatch(getCurrentTrackAsync()), [])
   usePolling(action, { isActive: isVisible && currentUser != null })
 
+  const isReady = [state.currentTrack.fetchState, state.user.fetchState].every(
+    (s) => s.state !== states.new && s.lastResponseAt != null
+  )
+
   return html`
-    <div class="app">
-      <${Playing} track=${track} isPlaying=${isPlaying} />
+    <div class="container">
+      <nav>
+        <ul>
+          <li><strong>Recommendli</strong></li>
+        </ul>
+        </nav>
+        <div class="grid">
+          <${LoadingPlayer} isLoading=${!isReady}>
+            <${Playing} track=${track} isPlaying=${isPlaying} />
+          </${LoadingPlayer}>
+        </div>
       <pre>${JSON.stringify(state, null, 4)}</pre>
     </div>
   `

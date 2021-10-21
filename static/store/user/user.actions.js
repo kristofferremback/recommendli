@@ -1,5 +1,5 @@
 import { withFetchState, createSetFetchState } from '../lib/with-fetch-state.js'
-import withRecommendliClient from '../../recommendli/client.js'
+import recommendliClient from '../../recommendli/client.js'
 
 export const types = {
   SET_CURRENT_USER: 'SET_CURRENT_USER',
@@ -14,11 +14,9 @@ const setCurrentUser = (currentUser) => ({
 const setCurrentUserFetchState = createSetFetchState(types.SET_CURRENT_USER_FETCH_STATE)
 
 export const getCurrentUserAsync = () => {
-  return withRecommendliClient((client) => {
-    return withFetchState(setCurrentUserFetchState, async (dispatch) => {
-      const user = await client.getCurrentUser()
+  return withFetchState(setCurrentUserFetchState, async (dispatch) => {
+    const user = await recommendliClient.getCurrentUser()
 
-      dispatch(setCurrentUser(user))
-    })
+    dispatch(setCurrentUser(user))
   })
 }
