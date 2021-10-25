@@ -8,8 +8,29 @@ export const selectTrack = createSelector([selectCurrentTrack], (currentTrack) =
 
 export const selectTrackId = createSelector([selectTrack], (track) => (track != null ? track.id : null))
 
-const selectTrackStatus = createSelector([selectCurrentTrack], (currentTrack) =>
-  currentTrack.status != null ? currentTrack.status : { inLibrary: false }
+const selectTrackStatus = createSelector([selectCurrentTrack], (currentTrack) => {
+  const status =
+    currentTrack.status != null
+      ? currentTrack.status
+      : { inLibrary: false, playlists: undefined, track: undefined }
+
+  return {
+    ...status,
+    playlists: status.playlists ? status.playlists : [],
+    track: status.track ? status.track : { id: null },
+  }
+})
+
+export const selectTrackInLibrary = createSelector(
+  [selectTrackStatus],
+  /** @param {{ inLibrary: boolean }} status */
+  (status) => status.inLibrary
 )
 
-export const selectTrackInLibrary = createSelector([selectTrackStatus], (status) => status.inLibrary)
+export const selectTrackPlaylists = createSelector(
+  [selectTrackStatus],
+  /** @param {{ playlists: import('../../recommendli/client.js').Playlist[] }} status */
+  (status) => status.playlists
+)
+
+export const selectStatusTrackId = createSelector([selectTrackStatus], (status) => status.track.id)

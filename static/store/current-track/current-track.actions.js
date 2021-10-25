@@ -24,7 +24,7 @@ export const getCurrentTrackAsync = () => {
 
 const setCurrentTrackStatus = ({ inLibrary, track, playlists }) => ({
   type: types.SET_CURRENT_TRACK_STATUS,
-  payload: { inLibrary, track, playlists },
+  payload: { inLibrary, track, playlists: playlists },
 })
 
 const setCurrentTrackStatusFetchState = createSetFetchState(types.SET_CURRENT_TRACK_STATUS_FETCH_STATE)
@@ -32,6 +32,7 @@ const setCurrentTrackStatusFetchState = createSetFetchState(types.SET_CURRENT_TR
 export const checkCurrenTrackStatusAsync = () => {
   return withFetchState(setCurrentTrackStatusFetchState, async (dispatch) => {
     const { inLibrary, track, playlists } = await recommendliClient.checkCurrentTrack()
+    console.log({ inLibrary, track, playlists })
     dispatch(setCurrentTrackStatus({ inLibrary, track, playlists }))
   })
 }

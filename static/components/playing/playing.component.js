@@ -6,6 +6,7 @@ import { SpotifyLinkable, LinkableArtists } from '../linkable/linkable-component
  * @typedef {import('../../recommendli/client').Artist} Artist
  * @typedef {import('../../recommendli/client').Album} Album
  * @typedef {import('../../recommendli/client').Track} Track
+ * @typedef {import('../../recommendli/client').SimplePlaylist} SimplePlaylist
  */
 
 /**
@@ -16,8 +17,10 @@ const mapArtistNames = (artists) => artists.map((a) => a.name).join(', ')
 /**
  * @param {object} opts
  * @param {Track} opts.track
+ * @param {boolean} opts.inLibrary
+ * @param {SimplePlaylist[]} opts.playlists
  */
-const NowPlaying = ({ track }) => {
+const NowPlaying = ({ track, inLibrary, playlists }) => {
   const { artistNames, albumName } = useMemo(
     () => ({
       artistNames: html`<${LinkableArtists} artists=${track.artists} />`,
@@ -26,9 +29,25 @@ const NowPlaying = ({ track }) => {
     [mapArtistNames(track.artists), track.album.name]
   )
 
+  const possiblyPlural = useMemo(() => `playlist${playlists.length !== 1 ? 's' : ''}`, [playlists.length])
+
   return html`
     <div><small>by</small> <strong>${artistNames}</strong></div>
     <div><small>on</small> <strong>${albumName}</strong></div>
+    <br />
+
+    ${!inLibrary
+      ? html`<div>Track is new! 🎉</div>`
+      : html`
+          <div>
+            <details>
+              <summary>Track already on <strong>${playlists.length}</strong> ${possiblyPlural}</summary>
+              <ul>
+                ${playlists.map((playlist) => html`<li><${SpotifyLinkable} item=${playlist} /></li>`)}
+              </ul>
+            </details>
+          </div>
+        `}
   `
 }
 
@@ -64,13 +83,19 @@ const PlayingHeader = ({ isPlaying, track, title }) => {
  * @param {object} opts
  * @param {string} [opts.title]
  * @param {boolean} opts.isPlaying
+ * @param {boolean} opts.inLibrary
+ * @param {SimplePlaylist[]} opts.playlists
  * @param {Track} opts.track
  */
-const Playing = ({ title, isPlaying, track }) => {
+const Playing = ({ title, isPlaying, track, inLibrary, playlists }) => {
   return html`
     <article>
       <${PlayingHeader} isPlaying=${isPlaying} track=${track} title=${title} />
-      <${isPlaying ? NowPlaying : NothingPlaying} track=${track} />
+      <${isPlaying ? NowPlaying : NothingPlaying}
+        track=${track}
+        inLibrary=${inLibrary}
+        playlists=${playlists}
+      />
     </article>
   `
 }

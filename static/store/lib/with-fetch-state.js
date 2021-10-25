@@ -29,6 +29,7 @@ export const withFetchState = (setStateAction, actionFunc) => {
       await actionFunc(dispatch, getState)
       dispatch(setStateAction({ state: states.idle, lastResponseAt: new Date() }))
     } catch (error) {
+      console.log(error)
       dispatch(setStateAction({ state: states.error, lastResponseAt: new Date(), error }))
     }
   }

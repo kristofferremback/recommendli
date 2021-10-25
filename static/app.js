@@ -15,9 +15,11 @@ import { selectCurrentUser } from './store/user/user.selectors.js'
 import useEventListener from './hooks/use-event-listener.js'
 import {
   selectIsPlaying,
+  selectStatusTrackId,
   selectTrack,
   selectTrackId,
   selectTrackInLibrary,
+  selectTrackPlaylists,
 } from './store/current-track/current-track.selectors.js'
 
 import usePolling from './hooks/use-polling.js'
@@ -53,6 +55,8 @@ const App = () => {
   const track = selectTrack(state)
   const trackId = selectTrackId(state)
   const trackInLibrary = selectTrackInLibrary(state)
+  const trackPlaylists = selectTrackPlaylists(state)
+  const trackStatusId = selectStatusTrackId(state)
 
   const discoveryIsLoading = selectDiscoveryIsLoading(state)
   const discoveryPlaylist = selectDiscoveryPlaylist(state)
@@ -71,17 +75,20 @@ const App = () => {
 
   const prevTrackId = useLastNonNullish(trackId)
   useEffect(() => {
-    if (trackId != null && trackId !== prevTrackId) {
+    if (isPlaying && trackId !== trackStatusId) {
       // TODO: Actually somehow render the current track status
+      console.log('Diffin', { trackId, prevTrackId, trackStatusId })
       dispatch(checkCurrenTrackStatusAsync())
     }
-  }, [trackId])
+  }, [trackId, trackStatusId])
 
   const onGeneratePlaylist = useCallback(() => dispatch(generateDiscoveryPlaylistAsync()), [])
 
-  const isReady = [state.currentTrack.fetchState, state.user.fetchState].every(
-    (s) => s.state !== states.new && s.lastResponseAt != null
-  )
+  const isReady = [
+    state.currentTrack.fetchState,
+    state.user.fetchState,
+    state.currentTrack.statusFetchState,
+  ].every((s) => s.state !== states.new && s.lastResponseAt != null)
 
   return html`
     <div class="container-fluid">
@@ -97,7 +104,7 @@ const App = () => {
             playlist=${discoveryPlaylist}
           />
           <${LoadingPlayer} isLoading=${!isReady}>
-            <${Playing} track=${track} isPlaying=${isPlaying} />
+            <${Playing} track=${track} isPlaying=${isPlaying} inLibrary=${trackInLibrary} playlists=${trackPlaylists} />
           </${LoadingPlayer}>
         </div>
       <pre>${JSON.stringify(state, null, 4)}</pre>

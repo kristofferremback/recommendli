@@ -69,7 +69,11 @@ const recommendliClient = {
   checkCurrentTrack: async () => {
     const response = await throwOn404(redirectingFetch('/recommendations/v1/check-current-track-in-library'))
     const { in_library: inLibrary, track, playlists } = await response.json()
-    return { inLibrary, track, playlists: playlists.map((p) => ({ ...p, tracks: undefined })) }
+    return {
+      inLibrary,
+      track,
+      playlists: !playlists ? [] : playlists.map((p) => ({ ...p, tracks: undefined })),
+    }
   },
 }
 
