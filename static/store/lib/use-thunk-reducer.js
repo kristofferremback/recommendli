@@ -1,5 +1,5 @@
 // @ts-ignore
-import { useMemo, useReducer, useCallback, useRef } from 'https://unpkg.com/htm/preact/standalone.module.js'
+import { useMemo, useReducer, useCallback, useRef } from '../../deps/preact/hooks.js'
 import withAsyncDispatch from './async-dispatch.js'
 
 const useThunkReducer = (reducer, initialState, initializer) => {

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'https://unpkg.com/htm/preact/standalone.module.js'
+import { useEffect, useRef } from '../deps/preact/hooks.js'
 
 export const usePrevious = (value) => {
   const ref = useRef(value)

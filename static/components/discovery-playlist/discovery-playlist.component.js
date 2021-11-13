@@ -1,4 +1,4 @@
-import { html } from 'https://unpkg.com/htm/preact/standalone.module.js'
+import { html } from '../../lib/html.js'
 import { LinkableArtists, SpotifyLinkable } from '../linkable/linkable-component.js'
 
 /**

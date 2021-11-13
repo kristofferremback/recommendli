@@ -1,5 +1,5 @@
-// @ts-ignore
-import { html, useContext, useEffect, useCallback } from 'https://unpkg.com/htm/preact/standalone.module.js'
+import { useContext, useEffect, useCallback } from './deps/preact/hooks.js'
+import { html } from './lib/html.js'
 import { getCurrentUserAsync } from './store/user/user.actions.js'
 import {
   checkCurrenTrackStatusAsync,
@@ -76,8 +76,6 @@ const App = () => {
   const prevTrackId = useLastNonNullish(trackId)
   useEffect(() => {
     if (isPlaying && trackId !== trackStatusId) {
-      // TODO: Actually somehow render the current track status
-      console.log('Diffin', { trackId, prevTrackId, trackStatusId })
       dispatch(checkCurrenTrackStatusAsync())
     }
   }, [trackId, trackStatusId])

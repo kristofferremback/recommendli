@@ -1,4 +1,5 @@
-import { html, useMemo } from 'https://unpkg.com/htm/preact/standalone.module.js'
+import { html } from '../../lib/html.js'
+import { useMemo } from '../../deps/preact/hooks.js'
 
 import { SpotifyLinkable, LinkableArtists } from '../linkable/linkable-component.js'
 

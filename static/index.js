@@ -1,6 +1,6 @@
-// @ts-ignore
-import { html, render, useMemo } from 'https://unpkg.com/htm/preact/standalone.module.js'
-
+import { html } from './lib/html.js'
+import { render } from './deps/preact.js'
+import { useMemo } from './deps/preact/hooks.js'
 import App from './app.js'
 
 import { StoreContext, globalReducer, initialState } from './store/store.js'

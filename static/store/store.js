@@ -1,12 +1,12 @@
 // @ts-ignore
-import { createContext } from 'https://unpkg.com/htm/preact/standalone.module.js'
+import { createContext } from '../deps/preact.js'
 import { combineReducers } from './lib/combine-reducers.js'
 import * as currentTrackReducer from './current-track/current-track.reducer.js'
 import * as userReducer from './user/user.reducer.js'
 import * as windowReducer from './window/window.reducer.js'
 import * as generateReducer from './generate/generate.reducer.js'
 
-export const StoreContext = createContext()
+export const StoreContext = createContext(undefined)
 
 const reducerMappings = {
   user: {

@@ -1,4 +1,4 @@
-import { useEffect } from 'https://unpkg.com/htm/preact/standalone.module.js'
+import { useEffect } from '../deps/preact/hooks.js'
 
 const useEventListener = (eventName, onEvent) => {
   return useEffect(() => {

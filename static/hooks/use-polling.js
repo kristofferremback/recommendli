@@ -1,4 +1,4 @@
-import { useEffect } from 'https://unpkg.com/htm/preact/standalone.module.js'
+import { useEffect } from '../deps/preact/hooks.js'
 
 const usePolling = (action, { isActive, interval = 2000 }) => {
   return useEffect(() => {
