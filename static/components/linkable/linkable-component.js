@@ -1,4 +1,4 @@
-import { html } from '../../lib/html.js'
+import html from '../../lib/html.js'
 
 /**
  * @typedef {import('../../recommendli/client').Artist} Artist

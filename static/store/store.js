@@ -1,12 +1,12 @@
-// @ts-ignore
 import { createContext } from '../deps/preact.js'
+
 import { combineReducers } from './lib/combine-reducers.js'
+import createUseStore from './hooks/use-store.js'
+
 import * as currentTrackReducer from './current-track/current-track.reducer.js'
 import * as userReducer from './user/user.reducer.js'
 import * as windowReducer from './window/window.reducer.js'
 import * as generateReducer from './generate/generate.reducer.js'
-
-export const StoreContext = createContext(undefined)
 
 const reducerMappings = {
   user: {
@@ -54,6 +54,10 @@ const combine = (mappings) => {
 }
 
 const combined = combine(reducerMappings)
+
+export const StoreContext = createContext(undefined)
+
+export const useStore = createUseStore(StoreContext)
 
 export const initialState = combined.initialState
 

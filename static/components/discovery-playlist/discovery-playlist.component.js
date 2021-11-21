@@ -1,4 +1,4 @@
-import { html } from '../../lib/html.js'
+import html from '../../lib/html.js'
 import { LinkableArtists, SpotifyLinkable } from '../linkable/linkable-component.js'
 
 /**

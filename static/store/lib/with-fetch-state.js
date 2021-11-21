@@ -12,16 +12,14 @@ export const defaultFetchState = () => ({
 })
 
 /**
- * @template State
- *
- * @param {import('./async-dispatch').actionFunc} setStateAction
- * @param {import('./async-dispatch').asyncThunk<State>} actionFunc
+ * @param {import('./types').ActionFunc} setStateAction
+ * @param {import('./types').AsyncThunk} actionFunc
  * @returns
  */
 export const withFetchState = (setStateAction, actionFunc) => {
   /**
-   * @param {import('./async-dispatch').dispatchFunc} dispatch
-   * @param {import('./async-dispatch').getStateFunc<any>} getState
+   * @param {import('./types').Dispatch} dispatch
+   * @param {import('./types').GetState} getState
    */
   const thunk = async (dispatch, getState) => {
     try {
@@ -49,3 +47,5 @@ export const createSetFetchState = (type) => {
 export const updateFetchState = (prev, next) => {
   return { ...next, lastResponseAt: next.lastResponseAt || prev.lastResponseAt }
 }
+
+export const isReady = (s) => s.state !== states.new && s.lastResponseAt != null

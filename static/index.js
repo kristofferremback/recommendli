@@ -1,19 +1,22 @@
-import { html } from './lib/html.js'
+import html from './lib/html.js'
 import { render } from './deps/preact.js'
 import { useMemo } from './deps/preact/hooks.js'
 import App from './app.js'
 
-import { StoreContext, globalReducer, initialState } from './store/store.js'
-import useThunkReducer from './store/lib/use-thunk-reducer.js'
+import { globalReducer, initialState, useStore } from './store/store.js'
+import loggerMiddleware from './store/lib/middleware/logger.middleware.js'
+import thunkMiddleware from './store/lib/middleware/thunk.middleware.js'
 
 const AppContainer = () => {
-  const [state, dispatch] = useThunkReducer(globalReducer, initialState)
-  const contextValue = useMemo(() => ({ state, dispatch }), [state, dispatch])
+  const { StoreContext, contextValue } = useStore(globalReducer, initialState, [
+    thunkMiddleware,
+    loggerMiddleware,
+  ])
 
   return html`
-  <${StoreContext.Provider} value=${contextValue}>
-    <${App} />
-  </${StoreContext.Provider}>
+    <${StoreContext.Provider} value=${contextValue}>
+      <${App} />
+    </${StoreContext.Provider}>
   `
 }
 
