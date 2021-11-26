@@ -1,9 +1,10 @@
 import createSelector from '../lib/create-selector.js'
-import { isReady } from '../lib/with-fetch-state.js'
+import { isLoading, isReady } from '../lib/with-fetch-state.js'
 
 const selectCurrentTrack = (state) => state.currentTrack
 
 const selectTrackFetchState = createSelector([selectCurrentTrack], (track) => track.fetchState)
+const selectStatusFetchState = createSelector([selectCurrentTrack], (track) => track.statusFetchState)
 
 export const selectIsPlaying = createSelector([selectCurrentTrack], (currentTrack) => currentTrack.isPlaying)
 
@@ -37,5 +38,7 @@ export const selectTrackPlaylists = createSelector(
 )
 
 export const selectStatusTrackId = createSelector([selectTrackStatus], (status) => status.track.id)
+
+export const selectStatusTrackIsLoading = createSelector([selectStatusFetchState], isLoading)
 
 export const selectTrackIsReady = createSelector([selectTrackFetchState], isReady)

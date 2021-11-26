@@ -49,3 +49,5 @@ export const updateFetchState = (prev, next) => {
 }
 
 export const isReady = (s) => s.state !== states.new && s.lastResponseAt != null
+
+export const isLoading = (s) => s.state === states.loading

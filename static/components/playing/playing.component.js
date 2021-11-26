@@ -2,6 +2,7 @@ import html from '../../lib/html.js'
 import { useMemo } from '../../deps/preact/hooks.js'
 
 import { SpotifyLinkable, LinkableArtists } from '../linkable/linkable-component.js'
+import { LoadingText } from '../conditional-loading/conditional-loading.component.js'
 
 /**
  * @typedef {import('../../recommendli/client').Artist} Artist
@@ -19,9 +20,10 @@ const mapArtistNames = (artists) => artists.map((a) => a.name).join(', ')
  * @param {object} opts
  * @param {Track} opts.track
  * @param {boolean} opts.inLibrary
+ * @param {boolean} opts.inLibraryLoading
  * @param {SimplePlaylist[]} opts.playlists
  */
-const NowPlaying = ({ track, inLibrary, playlists }) => {
+const NowPlaying = ({ track, inLibrary, inLibraryLoading, playlists }) => {
   const { artistNames, albumName } = useMemo(
     () => ({
       artistNames: html`<${LinkableArtists} artists=${track.artists} />`,
@@ -32,12 +34,12 @@ const NowPlaying = ({ track, inLibrary, playlists }) => {
 
   const possiblyPlural = useMemo(() => `playlist${playlists.length !== 1 ? 's' : ''}`, [playlists.length])
 
-  return html`
-    <div><small>by</small> <strong>${artistNames}</strong></div>
-    <div><small>on</small> <strong>${albumName}</strong></div>
-    <br />
+  const InLibraryComponent = () => {
+    if (inLibraryLoading) {
+      return html`<${LoadingText}>Checking track status</ ${LoadingText}>`
+    }
 
-    ${!inLibrary
+    return !inLibrary
       ? html`<div>Track is new! 🎉</div>`
       : html`
           <div>
@@ -48,7 +50,15 @@ const NowPlaying = ({ track, inLibrary, playlists }) => {
               </ul>
             </details>
           </div>
-        `}
+        `
+  }
+
+  return html`
+    <div><small>by</small> <strong>${artistNames}</strong></div>
+    <div><small>on</small> <strong>${albumName}</strong></div>
+    <br />
+
+    <${InLibraryComponent} />
   `
 }
 
@@ -85,10 +95,11 @@ const PlayingHeader = ({ isPlaying, track, title }) => {
  * @param {string} [opts.title]
  * @param {boolean} opts.isPlaying
  * @param {boolean} opts.inLibrary
+ * @param {boolean} opts.inLibraryLoading
  * @param {SimplePlaylist[]} opts.playlists
  * @param {Track} opts.track
  */
-const Playing = ({ title, isPlaying, track, inLibrary, playlists }) => {
+const Playing = ({ title, isPlaying, track, inLibrary, inLibraryLoading, playlists }) => {
   return html`
     <article>
       <${PlayingHeader} isPlaying=${isPlaying} track=${track} title=${title} />
@@ -96,6 +107,7 @@ const Playing = ({ title, isPlaying, track, inLibrary, playlists }) => {
         track=${track}
         inLibrary=${inLibrary}
         playlists=${playlists}
+        inLibraryLoading=${inLibraryLoading}
       />
     </article>
   `

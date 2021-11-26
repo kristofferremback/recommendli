@@ -10,6 +10,7 @@ import useEventListener from '../../hooks/use-event-listener.js'
 import {
   selectIsPlaying,
   selectStatusTrackId,
+  selectStatusTrackIsLoading,
   selectTrack,
   selectTrackId,
   selectTrackInLibrary,
@@ -51,6 +52,7 @@ const PlayingContainer = () => {
   const statusTrackId = selectStatusTrackId(state)
   const trackInLibrary = selectTrackInLibrary(state)
   const trackPlaylists = selectTrackPlaylists(state)
+  const satusTrackIsLoading = selectStatusTrackIsLoading(state)
 
   const isPlaying = selectIsPlaying(state)
 
@@ -68,7 +70,7 @@ const PlayingContainer = () => {
 
   return html`
     <${LoadingWrapper} isLoading=${isLoading}>
-    <${Playing} track=${track} isPlaying=${isPlaying} inLibrary=${trackInLibrary} playlists=${trackPlaylists} />
+    <${Playing} track=${track} isPlaying=${isPlaying} inLibraryLoading=${satusTrackIsLoading} inLibrary=${trackInLibrary} playlists=${trackPlaylists} />
     </${LoadingWrapper}>
   `
 }
