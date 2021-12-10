@@ -66,7 +66,10 @@ func main() {
 	r.Get(authAdaptor.Path(), authAdaptor.TokenCallbackHandler())
 	r.Get(authAdaptor.UIRedirectPath(), authAdaptor.UIRedirectHandler())
 
-	recommendatinsHandler := getRecommendationsHandler(log, authAdaptor)
+	recommendatinsHandler, err := getRecommendationsHandler(log, authAdaptor)
+	if err != nil {
+		log.Fatal("Setting up recommendations handler", err)
+	}
 	r.Mount("/recommendations", recommendatinsHandler)
 
 	fs := http.FileServer(http.Dir("./static"))
@@ -92,16 +95,20 @@ func main() {
 	log.Info("Server shutdown")
 }
 
-func getRecommendationsHandler(log *logging.Log, authAdaptor *recommendations.AuthAdaptor) *chi.Mux {
-	serviceCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), keyvaluestore.JSONDiskStore("/Users/kristofferostlund/.recommendli/recommendations/cache"))
-	spotifyCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), keyvaluestore.JSONDiskStore("/Users/kristofferostlund/.recommendli/recommendations/spotify-provider"))
+func getRecommendationsHandler(log *logging.Log, authAdaptor *recommendations.AuthAdaptor) (*chi.Mux, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("getting user home dir: %w", err)
+	}
+	serviceCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), keyvaluestore.JSONDiskStore(fmt.Sprintf("%s/.recommendli/recommendations/cache", homeDir)))
+	spotifyCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), keyvaluestore.JSONDiskStore(fmt.Sprintf("%s/.recommendli/recommendations/spotify-provider", homeDir)))
 	recommendatinsHandler := recommendations.NewRouter(
 		recommendations.NewServiceFactory(log, serviceCache, recommendations.NewDummyUserPreferenceProvider()),
 		recommendations.NewSpotifyProviderFactory(log, spotifyCache),
 		authAdaptor,
 		log,
 	)
-	return recommendatinsHandler
+	return recommendatinsHandler, nil
 }
 
 func envString(env, fallback string) string {
