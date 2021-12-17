@@ -50,7 +50,12 @@ const App = () => {
         />
         <${PlayingContainer} />
       </div>
-      <pre>${JSON.stringify(state, null, 4)}</pre>
+      <div>
+        <details>
+          <summary>Show entire state</summary>
+          <pre>${JSON.stringify(state, null, 4)}</pre>
+        </details>
+      </div>
     </div>
   `
 }

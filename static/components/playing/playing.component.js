@@ -1,5 +1,5 @@
 import html from '../../lib/html.js'
-import { useMemo } from '../../deps/preact/hooks.js'
+import { useMemo, useCallback, useState } from '../../deps/preact/hooks.js'
 
 import { SpotifyLinkable, LinkableArtists } from '../linkable/linkable-component.js'
 import { LoadingText } from '../conditional-loading/conditional-loading.component.js'
@@ -24,6 +24,9 @@ const mapArtistNames = (artists) => artists.map((a) => a.name).join(', ')
  * @param {SimplePlaylist[]} opts.playlists
  */
 const NowPlaying = ({ track, inLibrary, inLibraryLoading, playlists }) => {
+  const [isOpen, setIsOpen] = useState(false)
+  const toggleIsOpen = useCallback(() => setIsOpen((o) => !o), [setIsOpen])
+
   const { artistNames, albumName } = useMemo(
     () => ({
       artistNames: html`<${LinkableArtists} artists=${track.artists} />`,
@@ -34,16 +37,16 @@ const NowPlaying = ({ track, inLibrary, inLibraryLoading, playlists }) => {
 
   const possiblyPlural = useMemo(() => `playlist${playlists.length !== 1 ? 's' : ''}`, [playlists.length])
 
-  const InLibraryComponent = () => {
+  const InLibraryComponent = useCallback(() => {
     if (inLibraryLoading) {
-      return html`<${LoadingText}>Checking track status</ ${LoadingText}>`
+      return html`<${LoadingText}>Checking track status</${LoadingText}>`
     }
 
     return !inLibrary
       ? html`<div>Track is new! 🎉</div>`
       : html`
           <div>
-            <details>
+            <details open=${isOpen} onclick=${toggleIsOpen}>
               <summary>Track already on <strong>${playlists.length}</strong> ${possiblyPlural}</summary>
               <ul>
                 ${playlists.map((playlist) => html`<li><${SpotifyLinkable} item=${playlist} /></li>`)}
@@ -51,7 +54,7 @@ const NowPlaying = ({ track, inLibrary, inLibraryLoading, playlists }) => {
             </details>
           </div>
         `
-  }
+  }, [inLibraryLoading, inLibrary, playlists.map((p) => p.id).join(',')])
 
   return html`
     <div><small>by</small> <strong>${artistNames}</strong></div>

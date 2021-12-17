@@ -9,6 +9,7 @@ import { throwOn404, redirectingFetch } from './redirecting-fetch.js'
  * @property {ExternalUrls} external_urls
  *
  * @typedef Album
+ * @property {string} id
  * @property {string} name
  * @property {ExternalUrls} external_urls
  *
@@ -24,11 +25,13 @@ import { throwOn404, redirectingFetch } from './redirecting-fetch.js'
  * @property {ExternalUrls} external_urls
  *
  * @typedef Playlist
+ * @property {string} id
  * @property {string} name
  * @property {ExternalUrls} external_urls
  * @property {Track[]} tracks
  *
  * @typedef SimplePlaylist
+ * @property {string} id
  * @property {string} name
  * @property {ExternalUrls} external_urls
  *
