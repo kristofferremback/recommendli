@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "esnext",
+    "composite": true,
+    "checkJs": true,
+    "lib": ["esnext", "dom"],
+    "esModuleInterop": true, // force import
+    "moduleResolution": "node",
+    "allowSyntheticDefaultImports": true // force import
+  },
+  "include": ["./**/*"],
+  "typeAcquisition": { "enable": true }
+}

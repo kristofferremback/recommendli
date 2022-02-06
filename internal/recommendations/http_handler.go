@@ -32,6 +32,7 @@ func NewRouter(svcFactory *ServiceFactory, spotifyProviderFactory *SpotifyAdapto
 	ar.Get("/v1/check-current-track-in-library", handler.withService(handler.checkCurrentTrackInLibrary))
 	ar.Get("/v1/generate-discovery-playlist", handler.withService(handler.generateDiscoveryPlaylist))
 	ar.Get("/v1/album-for-current-track", handler.withService(handler.getAlbumForCurrentTrack))
+	ar.Get("/v1/current-track", handler.withService(handler.getCurrentTrack))
 	ar.Get("/v1/playlists", handler.withService(handler.listPlaylists))
 	ar.Get("/v1/playlists/for", handler.withService(handler.getPlaylistMatchingPattern))
 	ar.Get("/v1/playlists/{playlistID}", handler.withService(handler.getPlaylist))
@@ -180,5 +181,29 @@ func (h *httpHandler) getAlbumForCurrentTrack(svc *Service) http.HandlerFunc {
 			return
 		}
 		srv.JSON(w, album)
+	}
+}
+
+func (h *httpHandler) getCurrentTrack(svc *Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		track, isPlaying, err := svc.GetCurrentTrack(r.Context())
+		if err != nil && errors.As(err, &ErrNoCurrentTrack{}) {
+			h.log.Error("user not listening to spotify", err)
+			srv.JSONError(w, err, srv.Status(400))
+			return
+		} else if err != nil {
+			h.log.Error("getting current track's album", err)
+			srv.InternalServerError(w)
+			return
+		}
+
+		var ptrTrack *spotify.FullTrack
+		if isPlaying {
+			ptrTrack = &track
+		}
+		srv.JSON(w, struct {
+			Track     *spotify.FullTrack `json:"track"`
+			IsPlaying bool               `json:"is_playing"`
+		}{ptrTrack, isPlaying})
 	}
 }
