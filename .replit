@@ -1,0 +1,9 @@
+language = "go"
+run = [
+  "go", 
+  "run", 
+  "./cmd/localserver/localserver.go", 
+  "-addr=0.0.0.0:9999", 
+  "-spotify-redirect-host=https://recommendli.kristofferostlu.repl.co", 
+  "-log-level=info"
+]
