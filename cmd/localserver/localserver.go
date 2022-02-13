@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path"
 	"syscall"
 	"time"
 
@@ -31,8 +32,9 @@ func main() {
 		spotifyRedirectHost = flag.String("spotify-redirect-host", defaultSpotifyRedirectHost, "Spotify redirect host")
 		logLevel            = flag.String("log-level", logging.LevelInfo.String(), "log level")
 
-		clientID     = envString("SPOTIFY_ID", "")
-		clientSecret = envString("SPOTIFY_SECRET", "")
+		clientID         = envString("SPOTIFY_ID", "")
+		clientSecret     = envString("SPOTIFY_SECRET", "")
+		fileCacheBaseDir = envString("FILE_CACHE_BASE_DIR", defaultCacheDir())
 	)
 	flag.Parse()
 
@@ -66,7 +68,7 @@ func main() {
 	r.Get(authAdaptor.Path(), authAdaptor.TokenCallbackHandler())
 	r.Get(authAdaptor.UIRedirectPath(), authAdaptor.UIRedirectHandler())
 
-	recommendatinsHandler, err := getRecommendationsHandler(log, authAdaptor)
+	recommendatinsHandler, err := getRecommendationsHandler(log, authAdaptor, fileCacheBaseDir)
 	if err != nil {
 		log.Fatal("Setting up recommendations handler", err)
 	}
@@ -95,13 +97,10 @@ func main() {
 	log.Info("Server shutdown")
 }
 
-func getRecommendationsHandler(log *logging.Log, authAdaptor *recommendations.AuthAdaptor) (*chi.Mux, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("getting user home dir: %w", err)
-	}
-	serviceCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), keyvaluestore.JSONDiskStore(fmt.Sprintf("%s/.recommendli/recommendations/cache", homeDir)))
-	spotifyCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), keyvaluestore.JSONDiskStore(fmt.Sprintf("%s/.recommendli/recommendations/spotify-provider", homeDir)))
+func getRecommendationsHandler(log *logging.Log, authAdaptor *recommendations.AuthAdaptor, fileCacheBaseDir string) (*chi.Mux, error) {
+	cacheDir := path.Join(fileCacheBaseDir, "recommendations")
+	serviceCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), keyvaluestore.JSONDiskStore(path.Join(cacheDir, "cache")))
+	spotifyCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), keyvaluestore.JSONDiskStore(path.Join(cacheDir, "spotify-provider")))
 	recommendatinsHandler := recommendations.NewRouter(
 		recommendations.NewServiceFactory(log, serviceCache, recommendations.NewDummyUserPreferenceProvider()),
 		recommendations.NewSpotifyProviderFactory(log, spotifyCache),
@@ -118,9 +117,19 @@ func envString(env, fallback string) string {
 	return fallback
 }
 
+func defaultCacheDir() string {
+	var baseDir string
+	if homeDir, err := os.UserHomeDir(); err != nil {
+		baseDir, _ = os.Getwd()
+	} else {
+		baseDir = homeDir
+	}
+	return path.Join(baseDir, ".recommendli")
+}
+
 func getStatus() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.Write([]byte("OK"))
+		w.Write([]byte("OK")) // nolint
 	})
 }
