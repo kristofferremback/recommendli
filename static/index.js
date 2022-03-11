@@ -10,7 +10,7 @@ import thunkMiddleware from './store/lib/middleware/thunk.middleware.js'
 const AppContainer = () => {
   const { StoreContext, contextValue } = useStore(globalReducer, initialState, [
     thunkMiddleware,
-    loggerMiddleware,
+    // loggerMiddleware,
   ])
 
   return html`

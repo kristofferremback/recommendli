@@ -1,3 +1,4 @@
+import { useMemo } from '../../deps/preact/hooks.js'
 import html from '../../lib/html.js'
 
 export const LoadingText = ({ children }) => {
@@ -6,10 +7,12 @@ export const LoadingText = ({ children }) => {
 
 const withConditionalLoading = (Loading) => {
   const ConditionalLoading = ({ isLoading, children }) => {
-    if (isLoading) {
-      return html`<${Loading} />`
-    }
-    return html`${children}`
+    return useMemo(() => {
+      if (isLoading) {
+        return html`<${Loading} />`
+      }
+      return html`${children}`
+    }, [isLoading])
   }
 
   return ConditionalLoading

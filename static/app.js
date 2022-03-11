@@ -12,6 +12,7 @@ import DiscoveryPlaylist from './components/discovery-playlist/discovery-playlis
 import { generateDiscoveryPlaylistAsync } from './store/generate/generate.actions.js'
 import { selectDiscoveryIsLoading, selectDiscoveryPlaylist } from './store/generate/generate.selectors.js'
 import PlayingContainer from './components/playing/playing.container.js'
+import UserPreferencesContainer from './components/user-preferences/user-preferences.container.js'
 
 const App = () => {
   /**
@@ -49,6 +50,10 @@ const App = () => {
           playlist=${discoveryPlaylist}
         />
         <${PlayingContainer} />
+      </div>
+      <div class="grid!">
+        <div></div>
+        <${UserPreferencesContainer} />
       </div>
       <div>
         <details>

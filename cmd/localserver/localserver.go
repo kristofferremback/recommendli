@@ -101,8 +101,9 @@ func getRecommendationsHandler(log *logging.Log, authAdaptor *recommendations.Au
 	cacheDir := path.Join(fileCacheBaseDir, "recommendations")
 	serviceCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), keyvaluestore.JSONDiskStore(path.Join(cacheDir, "cache")))
 	spotifyCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), keyvaluestore.JSONDiskStore(path.Join(cacheDir, "spotify-provider")))
+	userPrefsCache := keyvaluestore.JSONDiskStore(path.Join(cacheDir, "user-preferences"))
 	recommendatinsHandler := recommendations.NewRouter(
-		recommendations.NewServiceFactory(log, serviceCache, recommendations.NewDummyUserPreferenceProvider()),
+		recommendations.NewServiceFactory(log, serviceCache, recommendations.NewUserPreferenceProvider(userPrefsCache)),
 		recommendations.NewSpotifyProviderFactory(log, spotifyCache),
 		authAdaptor,
 		log,

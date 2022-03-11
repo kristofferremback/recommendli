@@ -12,6 +12,8 @@ import (
 	"github.com/zmb3/spotify"
 )
 
+const RecommendationPlaylistNamePrefix = "recommendli"
+
 type KeyValueStore interface {
 	Get(ctx context.Context, key string, out interface{}) (bool, error)
 	Put(ctx context.Context, key string, data interface{}) error
@@ -33,15 +35,30 @@ type SpotifyProvider interface {
 }
 
 type UserPreferenceProvider interface {
-	GetPreferences(ctx context.Context, userID string) (UserPreferences, error)
+	Get(ctx context.Context, userID string) (UserPreferences, error)
+	Set(ctx context.Context, userID string, prefs UserPreferences) error
 }
 
 type UserPreferences struct {
-	LibraryPattern                   *regexp.Regexp
-	DiscoveryPlaylistNames           []string
-	WeightedWords                    map[string]int
-	MinimumAlbumSize                 int
-	RecommendationPlaylistNamePrefix string
+	// LibraryPattern is the pattern a playlist must match to be
+	// considered to be part of one's library.
+	// Example: `^Metal \d+` will match "Metal 123 - blabla"
+	// but not `some metal`.
+	LibraryPattern *regexp.Regexp
+	// DiscoveryPlaylistNames is a list of playlist names used for
+	// as base for the recommendations playlist.
+	DiscoveryPlaylistNames []string
+	// Weighted words is used for either penalising or preferring
+	// various words in track titles to modify their score.
+	// Example: map[string]int{"remix": -30} will penalise any
+	// track with the word "remix" (case-insensitive) in its name.
+	WeightedWords map[string]int
+	// MinimumAlbumSize is used for filtering out tracks that may
+	// still not be part of an EP or Album but eventually may be.
+	// A common pattern of releases (in metal spheres at least)
+	// is to release a number of singles/EPs with more tracks added
+	// each release.
+	MinimumAlbumSize int
 }
 
 func (u UserPreferences) IsDiscoveryPlaylistName(name string) bool {
@@ -53,7 +70,7 @@ func (u UserPreferences) IsLibraryPlaylistName(name string) bool {
 }
 
 func (u UserPreferences) RecommendationPlaylistName(kind string, now time.Time) string {
-	return fmt.Sprintf("%s %s %s", u.RecommendationPlaylistNamePrefix, kind, now.Format("2006-01-02"))
+	return fmt.Sprintf("%s %s %s", RecommendationPlaylistNamePrefix, kind, now.Format("2006-01-02"))
 }
 
 type ServiceFactory struct {
@@ -179,7 +196,7 @@ func (s *Service) CheckPlayingTrackInLibrary(ctx context.Context) (spotify.FullT
 	if err != nil {
 		return spotify.FullTrack{}, nil, fmt.Errorf("listing user playlists checking if track is in library: %w", err)
 	}
-	prefs, err := s.userPreferences.GetPreferences(ctx, usr.ID)
+	prefs, err := s.userPreferences.Get(ctx, usr.ID)
 	if err != nil {
 		return spotify.FullTrack{}, nil, fmt.Errorf("getting user prefences: %w", err)
 	}
@@ -207,6 +224,29 @@ func (s *Service) CheckPlayingTrackInLibrary(ctx context.Context) (spotify.FullT
 	return currentTrack, nil, nil
 }
 
+func (s *Service) GetCurrentUserPreferences(ctx context.Context) (UserPreferences, error) {
+	usr, err := s.GetCurrentUser(ctx)
+	if err != nil {
+		return UserPreferences{}, err
+	}
+	prefs, err := s.userPreferences.Get(ctx, usr.ID)
+	if err != nil {
+		return UserPreferences{}, fmt.Errorf("getting preferences: %w", err)
+	}
+	return prefs, nil
+}
+
+func (s *Service) SetCurrentUserPreferences(ctx context.Context, prefs UserPreferences) error {
+	usr, err := s.GetCurrentUser(ctx)
+	if err != nil {
+		return err
+	}
+	if err := s.userPreferences.Set(ctx, usr.ID, prefs); err != nil {
+		return fmt.Errorf("sett pingreferences: %w", err)
+	}
+	return nil
+}
+
 func (s *Service) CreateDiscoveryPlaylist(ctx context.Context) (spotify.FullPlaylist, error) {
 	return s.generateDiscoveryPlaylist(ctx, false)
 }
@@ -225,7 +265,7 @@ func (s *Service) generateDiscoveryPlaylist(ctx context.Context, dryRun bool) (s
 	if err != nil {
 		return spotify.FullPlaylist{}, fmt.Errorf("listing user playlists generating discovery playlist: %w", err)
 	}
-	prefs, err := s.userPreferences.GetPreferences(ctx, usr.ID)
+	prefs, err := s.userPreferences.Get(ctx, usr.ID)
 	if err != nil {
 		return spotify.FullPlaylist{}, fmt.Errorf("getting user prefences: %w", err)
 	}

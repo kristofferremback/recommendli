@@ -1,6 +1,7 @@
 package recommendations
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -29,6 +30,8 @@ func NewRouter(svcFactory *ServiceFactory, spotifyProviderFactory *SpotifyAdapto
 
 	ar := r.With(auth.Middleware())
 	ar.Get("/v1/whoami", handler.withService(handler.whoami))
+	ar.Get("/v1/user-preferences", handler.withService(handler.getUserPreferences))
+	ar.Post("/v1/user-preferences", handler.withService(handler.setUserPreferences))
 	ar.Get("/v1/check-current-track-in-library", handler.withService(handler.checkCurrentTrackInLibrary))
 	ar.Get("/v1/generate-discovery-playlist", handler.withService(handler.generateDiscoveryPlaylist))
 	ar.Get("/v1/album-for-current-track", handler.withService(handler.getAlbumForCurrentTrack))
@@ -72,6 +75,50 @@ func (h *httpHandler) whoami(svc *Service) http.HandlerFunc {
 			return
 		}
 		srv.JSON(w, usr)
+	}
+}
+
+func (h *httpHandler) getUserPreferences(svc *Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		prefs, err := svc.GetCurrentUserPreferences(r.Context())
+		if err != nil {
+			h.log.Error("getting user preferences", err)
+			srv.InternalServerError(w)
+			return
+		}
+		srv.JSON(w, userPreferencesDTOFor(prefs))
+	}
+}
+
+func (h *httpHandler) setUserPreferences(svc *Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var dto userPreferencesDTO
+		defer r.Body.Close()
+		if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+			h.log.Error("reading user preferences", err)
+			srv.JSONError(w, fmt.Errorf("malfored body: %w", err), srv.Status(400))
+			return
+		}
+		prefs, err := dto.UserPreferences()
+		if err != nil {
+			h.log.Error("converting user preferences", err)
+			srv.JSONError(w, fmt.Errorf("invalid user prefernces: %w", err), srv.Status(400))
+			return
+		}
+
+		ctx := r.Context()
+		if err := svc.SetCurrentUserPreferences(ctx, prefs); err != nil {
+			h.log.Error("setting user preferences", err)
+			srv.InternalServerError(w)
+			return
+		}
+		storedPrefs, err := svc.GetCurrentUserPreferences(ctx)
+		if err != nil {
+			h.log.Error("getting user preferences", err)
+			srv.InternalServerError(w)
+			return
+		}
+		srv.JSON(w, userPreferencesDTOFor(storedPrefs))
 	}
 }
 

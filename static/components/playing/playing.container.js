@@ -70,7 +70,7 @@ const PlayingContainer = () => {
 
   return html`
     <${LoadingWrapper} isLoading=${isLoading}>
-    <${Playing} track=${track} isPlaying=${isPlaying} inLibraryLoading=${satusTrackIsLoading} inLibrary=${trackInLibrary} playlists=${trackPlaylists} />
+      <${Playing} track=${track} isPlaying=${isPlaying} inLibraryLoading=${satusTrackIsLoading} inLibrary=${trackInLibrary} playlists=${trackPlaylists} />
     </${LoadingWrapper}>
   `
 }
