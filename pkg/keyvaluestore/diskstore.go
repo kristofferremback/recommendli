@@ -2,7 +2,9 @@ package keyvaluestore
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 )
@@ -26,7 +28,10 @@ func (d *DiskStore) Get(ctx context.Context, key string, out interface{}) (bool,
 		return false, fmt.Errorf("opening file: %w", err)
 	}
 	defer file.Close()
-	if err := d.serializer.Deserialize(file, &out); err != nil {
+	// Sometimes the file in Replit is empty
+	if err := d.serializer.Deserialize(file, &out); err != nil && errors.Is(err, io.ErrUnexpectedEOF) {
+		return false, nil
+	} else if err != nil {
 		return false, fmt.Errorf("deserializing data: %w", err)
 	}
 	return true, nil
