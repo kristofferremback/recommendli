@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type DiskStore struct {
@@ -29,7 +30,7 @@ func (d *DiskStore) Get(ctx context.Context, key string, out interface{}) (bool,
 	}
 	defer file.Close()
 	// Sometimes the file in Replit is empty
-	if err := d.serializer.Deserialize(file, &out); err != nil && errors.Is(err, io.ErrUnexpectedEOF) {
+	if err := d.serializer.Deserialize(file, &out); err != nil && d.errIsEOF(err) {
 		return false, nil
 	} else if err != nil {
 		return false, fmt.Errorf("deserializing data: %w", err)
@@ -52,8 +53,15 @@ func (d *DiskStore) Put(ctx context.Context, key string, data interface{}) error
 	return nil
 }
 
-func (c *DiskStore) filename(key string) string {
-	return filepath.Join(c.dir, key)
+func (d *DiskStore) filename(key string) string {
+	return filepath.Join(d.dir, key)
+}
+
+func (d *DiskStore) errIsEOF(err error) bool {
+	if err == nil {
+		return false
+	}
+	return errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) || strings.Contains(err.Error(), "EOF")
 }
 
 func mkdirp(dir string) error {
