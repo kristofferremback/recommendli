@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"net/http"
@@ -113,27 +112,15 @@ func getRecommendationsHandler(log *logging.Log, authAdaptor *recommendations.Au
 type kvPersistenceFactory func(prefix string) keyvaluestore.KV
 
 func persistenceFactoryWith(fileCacheBaseDir string) kvPersistenceFactory {
-	diskStore := func(prefix string) keyvaluestore.KV {
-		cacheDir := path.Join(fileCacheBaseDir, "recommendations")
-		return keyvaluestore.JSONDiskStore(path.Join(cacheDir, prefix))
-	}
-	replitStore := func(prefix string) keyvaluestore.KV {
-		ds := diskStore(prefix)
-		rs := keyvaluestore.ReplitDBJSONStore(prefix)
-
-		m := keyvaluestore.NewMigrator(logging.GlobaLogger, ds, rs)
-		if err := m.Migrate(context.Background()); err != nil {
-			panic(fmt.Errorf("migrating from disk to replit (prefix %s): %v", prefix, err))
-		}
-
-		return rs
-	}
-
 	if _, hasReplitDB := os.LookupEnv("REPLIT_DB_URL"); hasReplitDB {
-		return replitStore
+		return func(prefix string) keyvaluestore.KV {
+			return keyvaluestore.ReplitDBJSONStore(prefix)
+		}
 	}
 
-	return diskStore
+	return func(prefix string) keyvaluestore.KV {
+		return keyvaluestore.JSONDiskStore(path.Join(fileCacheBaseDir, "recommendations", prefix))
+	}
 }
 
 func envString(env, fallback string) string {
