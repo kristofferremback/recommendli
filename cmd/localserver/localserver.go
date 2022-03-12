@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net/http"
@@ -68,7 +69,7 @@ func main() {
 	r.Get(authAdaptor.Path(), authAdaptor.TokenCallbackHandler())
 	r.Get(authAdaptor.UIRedirectPath(), authAdaptor.UIRedirectHandler())
 
-	recommendatinsHandler, err := getRecommendationsHandler(log, authAdaptor, fileCacheBaseDir)
+	recommendatinsHandler, err := getRecommendationsHandler(log, authAdaptor, persistenceFactoryWith(fileCacheBaseDir))
 	if err != nil {
 		log.Fatal("Setting up recommendations handler", err)
 	}
@@ -97,10 +98,9 @@ func main() {
 	log.Info("Server shutdown")
 }
 
-func getRecommendationsHandler(log *logging.Log, authAdaptor *recommendations.AuthAdaptor, fileCacheBaseDir string) (*chi.Mux, error) {
-	cacheDir := path.Join(fileCacheBaseDir, "recommendations")
-	serviceCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), keyvaluestore.JSONDiskStore(path.Join(cacheDir, "cache")))
-	spotifyCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), keyvaluestore.JSONDiskStore(path.Join(cacheDir, "spotify-provider")))
+func getRecommendationsHandler(log *logging.Log, authAdaptor *recommendations.AuthAdaptor, persistedKV kvPersistenceFactory) (*chi.Mux, error) {
+	serviceCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), persistedKV("cache"))
+	spotifyCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), persistedKV("spotify-provider"))
 	recommendatinsHandler := recommendations.NewRouter(
 		recommendations.NewServiceFactory(log, serviceCache, recommendations.NewDummyUserPreferenceProvider()),
 		recommendations.NewSpotifyProviderFactory(log, spotifyCache),
@@ -108,6 +108,32 @@ func getRecommendationsHandler(log *logging.Log, authAdaptor *recommendations.Au
 		log,
 	)
 	return recommendatinsHandler, nil
+}
+
+type kvPersistenceFactory func(prefix string) keyvaluestore.KV
+
+func persistenceFactoryWith(fileCacheBaseDir string) kvPersistenceFactory {
+	diskStore := func(prefix string) keyvaluestore.KV {
+		cacheDir := path.Join(fileCacheBaseDir, "recommendations")
+		return keyvaluestore.JSONDiskStore(path.Join(cacheDir, prefix))
+	}
+	replitStore := func(prefix string) keyvaluestore.KV {
+		ds := diskStore(prefix)
+		rs := keyvaluestore.ReplitDBJSONStore(prefix)
+
+		m := keyvaluestore.NewMigrator(logging.GlobaLogger, ds, rs)
+		if err := m.Migrate(context.Background()); err != nil {
+			panic(fmt.Errorf("migrating from disk to replit (prefix %s): %v", prefix, err))
+		}
+
+		return rs
+	}
+
+	if _, hasReplitDB := os.LookupEnv("REPLIT_DB_URL"); hasReplitDB {
+		return replitStore
+	}
+
+	return diskStore
 }
 
 func envString(env, fallback string) string {

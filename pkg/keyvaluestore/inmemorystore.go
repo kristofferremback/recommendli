@@ -7,6 +7,8 @@ import (
 	"sync"
 )
 
+var _ KV = (*MemoryStore)(nil)
+
 type MemoryStore struct {
 	data map[string]interface{}
 	mux  *sync.RWMutex
@@ -48,4 +50,14 @@ func (m *MemoryStore) Put(ctx context.Context, key string, data interface{}) err
 	defer m.mux.Unlock()
 	m.data[key] = data
 	return nil
+}
+
+func (m *MemoryStore) List(ctx context.Context) ([]string, error) {
+	m.mux.Lock()
+	defer m.mux.Unlock()
+	keys := make([]string, len(m.data))
+	for key := range m.data {
+		keys = append(keys, key)
+	}
+	return keys, nil
 }

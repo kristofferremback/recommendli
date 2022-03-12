@@ -2,12 +2,10 @@ package keyvaluestore
 
 import (
 	"context"
+	"fmt"
 )
 
-type KV interface {
-	Get(ctx context.Context, key string, out interface{}) (bool, error)
-	Put(ctx context.Context, key string, data interface{}) error
-}
+var _ KV = (*CombinedStore)(nil)
 
 type CombinedStore struct {
 	primary, secondary KV
@@ -39,4 +37,28 @@ func (c *CombinedStore) Put(ctx context.Context, key string, data interface{}) e
 		return err
 	}
 	return c.secondary.Put(ctx, key, data)
+}
+
+func (c *CombinedStore) List(ctx context.Context) ([]string, error) {
+	seen := make(map[string]struct{})
+	var keys []string
+	pKeys, err := c.primary.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("listing keys from primary store: %w", err)
+	}
+	for _, key := range pKeys {
+		seen[key] = struct{}{}
+		keys = append(keys, key)
+	}
+	sKeys, err := c.secondary.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("listing keys from secondary store: %w", err)
+	}
+	for _, key := range sKeys {
+		if _, alreadySeen := seen[key]; !alreadySeen {
+			seen[key] = struct{}{}
+			keys = append(keys, key)
+		}
+	}
+	return keys, nil
 }

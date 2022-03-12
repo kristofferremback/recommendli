@@ -5,6 +5,8 @@ import (
 	"io"
 )
 
+var _ Serializer = (*JSONSerializer)(nil)
+
 type JSONSerializer struct{}
 
 func (s JSONSerializer) Serialize(writer io.Writer, data interface{}) error {
