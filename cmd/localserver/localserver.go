@@ -98,8 +98,8 @@ func main() {
 }
 
 func getRecommendationsHandler(log *logging.Log, authAdaptor *recommendations.AuthAdaptor, persistedKV kvPersistenceFactory) (*chi.Mux, error) {
-	serviceCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), persistedKV("cache"))
-	spotifyCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), persistedKV("spotify-provider"))
+	serviceCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), persistedKV("cache", true))
+	spotifyCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), persistedKV("spotify-provider", false))
 	recommendatinsHandler := recommendations.NewRouter(
 		recommendations.NewServiceFactory(log, serviceCache, recommendations.NewDummyUserPreferenceProvider()),
 		recommendations.NewSpotifyProviderFactory(log, spotifyCache),
@@ -109,17 +109,14 @@ func getRecommendationsHandler(log *logging.Log, authAdaptor *recommendations.Au
 	return recommendatinsHandler, nil
 }
 
-type kvPersistenceFactory func(prefix string) keyvaluestore.KV
+type kvPersistenceFactory func(prefix string, isLarge bool) keyvaluestore.KV
 
 func persistenceFactoryWith(fileCacheBaseDir string) kvPersistenceFactory {
-	// Disable replit DB for now, it's limits are sane but too low for me.
-	// if _, hasReplitDB := os.LookupEnv("REPLIT_DB_URL"); hasReplitDB {
-	// 	return func(prefix string) keyvaluestore.KV {
-	// 		return keyvaluestore.ReplitDBJSONStore(prefix)
-	// 	}
-	// }
+	return func(prefix string, isLarge bool) keyvaluestore.KV {
+		if _, hasReplitDB := os.LookupEnv("REPLIT_DB_URL"); hasReplitDB && !isLarge {
+			return keyvaluestore.ReplitDBJSONStore(prefix)
+		}
 
-	return func(prefix string) keyvaluestore.KV {
 		return keyvaluestore.JSONDiskStore(path.Join(fileCacheBaseDir, "recommendations", prefix))
 	}
 }
