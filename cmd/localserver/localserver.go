@@ -98,8 +98,8 @@ func main() {
 }
 
 func getRecommendationsHandler(log *logging.Log, authAdaptor *recommendations.AuthAdaptor, persistedKV kvPersistenceFactory) (*chi.Mux, error) {
-	serviceCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), persistedKV("cache", true))
-	spotifyCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), persistedKV("spotify-provider", false))
+	serviceCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), persistedKV("cache"))
+	spotifyCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), persistedKV("spotify-provider"))
 	recommendatinsHandler := recommendations.NewRouter(
 		recommendations.NewServiceFactory(log, serviceCache, recommendations.NewDummyUserPreferenceProvider()),
 		recommendations.NewSpotifyProviderFactory(log, spotifyCache),
