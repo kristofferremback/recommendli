@@ -112,11 +112,12 @@ func getRecommendationsHandler(log *logging.Log, authAdaptor *recommendations.Au
 type kvPersistenceFactory func(prefix string) keyvaluestore.KV
 
 func persistenceFactoryWith(fileCacheBaseDir string) kvPersistenceFactory {
-	if _, hasReplitDB := os.LookupEnv("REPLIT_DB_URL"); hasReplitDB {
-		return func(prefix string) keyvaluestore.KV {
-			return keyvaluestore.ReplitDBJSONStore(prefix)
-		}
-	}
+	// Disable replit DB for now, it's limits are sane but too low for me.
+	// if _, hasReplitDB := os.LookupEnv("REPLIT_DB_URL"); hasReplitDB {
+	// 	return func(prefix string) keyvaluestore.KV {
+	// 		return keyvaluestore.ReplitDBJSONStore(prefix)
+	// 	}
+	// }
 
 	return func(prefix string) keyvaluestore.KV {
 		return keyvaluestore.JSONDiskStore(path.Join(fileCacheBaseDir, "recommendations", prefix))
