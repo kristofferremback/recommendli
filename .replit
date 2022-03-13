@@ -1,7 +1,17 @@
-language = "go"
 run = [
-  "./deploy/start.sh", 
-  "-addr=0.0.0.0:9999", 
-  "-spotify-redirect-host=https://recommendli.kristofferostlu.repl.co", 
+  "./deploy/start.sh",
+  "-addr=0.0.0.0:9999",
+  "-spotify-redirect-host=https://recommendli.kristofferostlu.repl.co",
   "-log-level=info"
 ]
+
+entrypoint = "cmd/localserver/localserver.go"
+
+[languages.go]
+pattern = "**/*.go"
+
+[languages.go.languageServer]
+start = "gopls"
+
+[nix]
+channel = "stable-21_11"
