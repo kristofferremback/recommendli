@@ -60,7 +60,7 @@ func (t *TrackPlaylistIndex) Has(tt spotify.FullTrack) bool {
 	return ok
 }
 
-func (t *TrackPlaylistIndex) MatchesSimpleLaylists(simplePlaylists []spotify.SimplePlaylist) bool {
+func (t *TrackPlaylistIndex) MatchesSimplePlaylists(simplePlaylists []spotify.SimplePlaylist) bool {
 	if len(t.Playlists) != len(simplePlaylists) {
 		return false
 	}

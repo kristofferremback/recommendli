@@ -113,11 +113,6 @@ type kvPersistenceFactory func(prefix string) keyvaluestore.KV
 
 func persistenceFactoryWith(fileCacheBaseDir string) kvPersistenceFactory {
 	return func(prefix string) keyvaluestore.KV {
-		// Replit provides only 50MB per repl, even on their Hacker plan.
-		// if _, hasReplitDB := os.LookupEnv("REPLIT_DB_URL"); hasReplitDB {
-		// 	return keyvaluestore.ReplitDBJSONStore(prefix)
-		// }
-
 		return keyvaluestore.JSONDiskStore(path.Join(fileCacheBaseDir, "recommendations", prefix))
 	}
 }
