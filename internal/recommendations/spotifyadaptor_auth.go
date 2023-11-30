@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"time"
@@ -14,7 +15,7 @@ import (
 	"github.com/zmb3/spotify"
 	"golang.org/x/oauth2"
 
-	"github.com/kristofferostlund/recommendli/pkg/logging"
+	"github.com/kristofferostlund/recommendli/pkg/slogutil"
 	"github.com/kristofferostlund/recommendli/pkg/srv"
 )
 
@@ -33,11 +34,9 @@ var NoAuthenticationError error = errors.New("No authentication found")
 type AuthAdaptor struct {
 	authenticator              spotify.Authenticator
 	redirectURL, uiRedirectURL url.URL
-
-	log logging.Logger
 }
 
-func NewSpotifyAuthAdaptor(clientID, clientSecret string, redirectURL, uiRedirectURL url.URL, log logging.Logger) *AuthAdaptor {
+func NewSpotifyAuthAdaptor(clientID, clientSecret string, redirectURL, uiRedirectURL url.URL) *AuthAdaptor {
 	authenticator := spotify.NewAuthenticator(
 		redirectURL.String(),
 		spotify.ScopeUserReadPrivate,
@@ -54,7 +53,6 @@ func NewSpotifyAuthAdaptor(clientID, clientSecret string, redirectURL, uiRedirec
 		authenticator: authenticator,
 		redirectURL:   redirectURL,
 		uiRedirectURL: uiRedirectURL,
-		log:           log,
 	}
 }
 
@@ -68,9 +66,10 @@ func (a *AuthAdaptor) UIRedirectPath() string {
 
 func (a *AuthAdaptor) TokenCallbackHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
 		c, _ := r.Cookie(CookieState)
 		if c == nil || c.Value == "" {
-			a.log.Error("Missing required cookie", fmt.Errorf("Missing required cookie %s", CookieState))
+			slog.ErrorContext(ctx, "Missing required cookie", slogutil.Error(fmt.Errorf("Missing required cookie %s", CookieState)))
 			srv.InternalServerError(w)
 			return
 		}
@@ -78,21 +77,21 @@ func (a *AuthAdaptor) TokenCallbackHandler() http.HandlerFunc {
 		state, err := url.QueryUnescape(c.Value)
 		srv.ClearCookie(w, c)
 		if err != nil {
-			a.log.Error("Failed to escape state", err)
+			slog.ErrorContext(ctx, "Failed to escape state", slog.Any("error", err))
 			srv.InternalServerError(w)
 			return
 		}
 
 		token, err := a.authenticator.Token(state, r)
 		if err != nil {
-			a.log.Error("Failed to get token", err)
+			slog.ErrorContext(ctx, "Failed to get token", slogutil.Error(err))
 			srv.InternalServerError(w)
 			return
 		}
 
 		tokenB, err := json.Marshal(token)
 		if err != nil {
-			a.log.Error("Failed to marshal token", err)
+			slog.ErrorContext(ctx, "Failed to marshal token", slogutil.Error(err))
 			srv.InternalServerError(w)
 			return
 		}
@@ -113,7 +112,7 @@ func (a *AuthAdaptor) TokenCallbackHandler() http.HandlerFunc {
 			redirectTo, err := url.QueryUnescape(gc.Value)
 			srv.ClearCookie(w, gc)
 			if err != nil {
-				a.log.Error("Failed to get token", err)
+				slog.ErrorContext(ctx, "Failed to get token", slogutil.Error(err))
 				srv.InternalServerError(w)
 				return
 			}
@@ -128,9 +127,10 @@ func (a *AuthAdaptor) TokenCallbackHandler() http.HandlerFunc {
 
 func (a *AuthAdaptor) UIRedirectHandler() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
 		redirectTo := r.URL.Query().Get("url")
 		if redirectTo == "" {
-			a.log.Warn("No url provided, cannot redirect client")
+			slog.WarnContext(ctx, "No url provided, cannot redirect client")
 			srv.JSONError(w, errors.New("url is a required paramter"), srv.Status(400))
 			return
 		}
@@ -141,13 +141,14 @@ func (a *AuthAdaptor) UIRedirectHandler() http.HandlerFunc {
 func (a *AuthAdaptor) Middleware() func(h http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
 			c, _ := r.Cookie(CookieSpotifyToken)
 			if c != nil && c.Value != "" {
 				token := &oauth2.Token{}
 				decoded, _ := base64.StdEncoding.DecodeString(c.Value)
 				err := json.Unmarshal(decoded, token)
 				if err != nil {
-					a.log.Warn("Failed to unmarshal token", "error", err)
+					slog.WarnContext(ctx, "Failed to unmarshal token", slogutil.Error(err))
 					a.redirect(w, r, r.URL.String())
 					return
 				}

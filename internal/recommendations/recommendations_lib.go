@@ -3,6 +3,7 @@ package recommendations
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 
@@ -13,18 +14,19 @@ import (
 
 func (s *Service) getStoredTrackPlaylistIndex(ctx context.Context, usr spotify.User, simplePlaylists []spotify.SimplePlaylist) (*TrackPlaylistIndex, error) {
 	storeKey := fmt.Sprintf("cache_track-playlist-index_%s", usr.ID)
-	s.log.Debug("checking stored track playlist index", "user", usr.DisplayName, "key", storeKey)
+
+	slog.DebugContext(ctx, "checking stored track playlist index", "user", usr.DisplayName, "key", storeKey)
 	var index *TrackPlaylistIndex
 	found, err := s.store.Get(ctx, storeKey, &index)
 	if err != nil {
 		return nil, err
 	}
 	if found && index.MatchesSimplePlaylists(simplePlaylists) {
-		s.log.Debug("using stored track playlist index", "user", usr.DisplayName, "key", storeKey)
+		slog.DebugContext(ctx, "using stored track playlist index", "user", usr.DisplayName, "key", storeKey)
 		return index, nil
 	}
 
-	s.log.Debug("updating stored track playlist index", "user", usr.DisplayName, "key", storeKey)
+	slog.DebugContext(ctx, "updating stored track playlist index", "user", usr.DisplayName, "key", storeKey)
 	populatedLibrary, err := s.spotify.PopulatePlaylists(ctx, simplePlaylists)
 	if err != nil {
 		return nil, err
@@ -33,7 +35,7 @@ func (s *Service) getStoredTrackPlaylistIndex(ctx context.Context, usr spotify.U
 	if err := s.store.Put(ctx, storeKey, &index); err != nil {
 		return nil, err
 	}
-	s.log.Debug("stored track playlist index updated", "user", usr.DisplayName, "key", storeKey)
+	slog.DebugContext(ctx, "stored track playlist index updated", "user", usr.DisplayName, "key", storeKey)
 
 	return index, nil
 }
@@ -153,7 +155,7 @@ func (s *Service) scoreTracks(ctx context.Context, tracks []spotify.FullTrack, a
 				}
 				scores = append(scores, score{track: track, album: album, artistRelevace: artistRelevace})
 			}
-			s.log.Debug("getting most relevant tracks", "total count", len(tracks), "batch size", to-from, "from", from, "to", to)
+			slog.DebugContext(ctx, "getting most relevant tracks", "total count", len(tracks), "batch size", to-from, "from", from, "to", to)
 			trackChan <- indexAndTrack{i, scores}
 			return next(len(tracks)), nil
 		})

@@ -3,12 +3,13 @@ package recommendations
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strings"
 
 	"github.com/go-chi/chi"
-	"github.com/kristofferostlund/recommendli/pkg/logging"
+	"github.com/kristofferostlund/recommendli/pkg/slogutil"
 	"github.com/kristofferostlund/recommendli/pkg/sortby"
 	"github.com/kristofferostlund/recommendli/pkg/srv"
 	"github.com/zmb3/spotify"
@@ -18,12 +19,11 @@ const (
 	playlistIDKey = "playlistID"
 )
 
-func NewRouter(svcFactory *ServiceFactory, spotifyProviderFactory *SpotifyAdaptorFactory, auth *AuthAdaptor, log logging.Logger) *chi.Mux {
+func NewRouter(svcFactory *ServiceFactory, spotifyProviderFactory *SpotifyAdaptorFactory, auth *AuthAdaptor) *chi.Mux {
 	handler := &httpHandler{
 		svcFactory:             svcFactory,
 		spotifyProviderFactory: spotifyProviderFactory,
 		auth:                   auth,
-		log:                    log,
 	}
 	r := chi.NewRouter()
 
@@ -44,18 +44,18 @@ type httpHandler struct {
 	svcFactory             *ServiceFactory
 	spotifyProviderFactory *SpotifyAdaptorFactory
 	auth                   *AuthAdaptor
-	log                    logging.Logger
 }
 
 type spotifyClientHandlerFunc func(svc *Service) http.HandlerFunc
 
 func (h *httpHandler) withService(sHandler spotifyClientHandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
 		spotifyClient, err := h.auth.GetClient(r)
 		if err != nil && errors.Is(err, NoAuthenticationError) {
 			srv.JSONError(w, fmt.Errorf("user not signed in: %w", err), srv.Status(http.StatusUnauthorized))
 		} else if err != nil {
-			h.log.Error("getting spotify client", err)
+			slog.ErrorContext(ctx, "getting spotify client", slogutil.Error(err))
 			srv.InternalServerError(w)
 			return
 		}
@@ -65,9 +65,10 @@ func (h *httpHandler) withService(sHandler spotifyClientHandlerFunc) http.Handle
 
 func (h *httpHandler) whoami(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		usr, err := svc.GetCurrentUser(r.Context())
+		ctx := r.Context()
+		usr, err := svc.GetCurrentUser(ctx)
 		if err != nil {
-			h.log.Error("getting current user", err)
+			slog.ErrorContext(ctx, "getting current user", slogutil.Error(err))
 			srv.InternalServerError(w)
 			return
 		}
@@ -77,9 +78,10 @@ func (h *httpHandler) whoami(svc *Service) http.HandlerFunc {
 
 func (h *httpHandler) listPlaylists(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		playlists, err := svc.ListPlaylistsForCurrentUser(r.Context())
+		ctx := r.Context()
+		playlists, err := svc.ListPlaylistsForCurrentUser(ctx)
 		if err != nil {
-			h.log.Error("getting user's playlists", err)
+			slog.ErrorContext(ctx, "getting user's playlists", slogutil.Error(err))
 			srv.InternalServerError(w)
 			return
 		}
@@ -92,14 +94,15 @@ func (h *httpHandler) listPlaylists(svc *Service) http.HandlerFunc {
 
 func (h *httpHandler) getPlaylistMatchingPattern(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
 		pattern := r.URL.Query().Get("pattern")
 		if pattern == "" {
 			srv.JSONError(w, errors.New("pattern must be provided"), srv.Status(400))
 			return
 		}
-		playlists, err := svc.GetCurrentUsersPlaylistMatchingPattern(r.Context(), pattern)
+		playlists, err := svc.GetCurrentUsersPlaylistMatchingPattern(ctx, pattern)
 		if err != nil {
-			h.log.Error("getting user's playlists", err)
+			slog.ErrorContext(ctx, "getting user's playlists", slogutil.Error(err))
 			srv.InternalServerError(w)
 			return
 		}
@@ -112,14 +115,15 @@ func (h *httpHandler) getPlaylistMatchingPattern(svc *Service) http.HandlerFunc 
 
 func (h *httpHandler) getPlaylist(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
 		playlistID := chi.URLParam(r, playlistIDKey)
 		if playlistID == "" {
 			srv.JSONError(w, errors.New("missing playlist ID in path"), srv.Status(400))
 			return
 		}
-		playlist, err := svc.GetPlaylist(r.Context(), playlistID)
+		playlist, err := svc.GetPlaylist(ctx, playlistID)
 		if err != nil {
-			h.log.Error("getting user's playlists", err)
+			slog.ErrorContext(ctx, "getting user's playlists", slogutil.Error(err))
 			srv.InternalServerError(w)
 			return
 		}
@@ -129,13 +133,14 @@ func (h *httpHandler) getPlaylist(svc *Service) http.HandlerFunc {
 
 func (h *httpHandler) checkCurrentTrackInLibrary(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		currentTrack, playlists, err := svc.CheckPlayingTrackInLibrary(r.Context())
+		ctx := r.Context()
+		currentTrack, playlists, err := svc.CheckPlayingTrackInLibrary(ctx)
 		if err != nil && errors.As(err, &ErrNoCurrentTrack{}) {
-			h.log.Error("user not listening to spotify", err)
+			slog.ErrorContext(ctx, "user not listening to spotify", slogutil.Error(err))
 			srv.JSONError(w, err, srv.Status(400))
 			return
 		} else if err != nil {
-			h.log.Error("checking current track in library", err)
+			slog.ErrorContext(ctx, "checking current track in library", slogutil.Error(err))
 			srv.InternalServerError(w)
 			return
 		}
@@ -149,18 +154,19 @@ func (h *httpHandler) checkCurrentTrackInLibrary(svc *Service) http.HandlerFunc 
 
 func (h *httpHandler) generateDiscoveryPlaylist(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
 		var playlist spotify.FullPlaylist
 		var err error
 
 		dryRunStr := strings.ToLower(r.URL.Query().Get("dryrun"))
 		if dryRunStr == "true" {
-			playlist, err = svc.DryRunDiscoveryPlaylist(r.Context())
+			playlist, err = svc.DryRunDiscoveryPlaylist(ctx)
 		} else {
-			playlist, err = svc.CreateDiscoveryPlaylist(r.Context())
+			playlist, err = svc.CreateDiscoveryPlaylist(ctx)
 		}
 
 		if err != nil {
-			h.log.Error("generating discovery playlist", err)
+			slog.ErrorContext(ctx, "generating discovery playlist", slogutil.Error(err))
 			srv.InternalServerError(w)
 			return
 		}
@@ -170,13 +176,14 @@ func (h *httpHandler) generateDiscoveryPlaylist(svc *Service) http.HandlerFunc {
 
 func (h *httpHandler) getAlbumForCurrentTrack(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		album, err := svc.GetCurrentlyPlayingTrackAlbum(r.Context())
+		ctx := r.Context()
+		album, err := svc.GetCurrentlyPlayingTrackAlbum(ctx)
 		if err != nil && errors.As(err, &ErrNoCurrentTrack{}) {
-			h.log.Error("user not listening to spotify", err)
+			slog.ErrorContext(ctx, "user not listening to spotify", slogutil.Error(err))
 			srv.JSONError(w, err, srv.Status(400))
 			return
 		} else if err != nil {
-			h.log.Error("getting current track's album", err)
+			slog.ErrorContext(ctx, "getting current track's album", slogutil.Error(err))
 			srv.InternalServerError(w)
 			return
 		}
@@ -186,13 +193,14 @@ func (h *httpHandler) getAlbumForCurrentTrack(svc *Service) http.HandlerFunc {
 
 func (h *httpHandler) getCurrentTrack(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		track, isPlaying, err := svc.GetCurrentTrack(r.Context())
+		ctx := r.Context()
+		track, isPlaying, err := svc.GetCurrentTrack(ctx)
 		if err != nil && errors.As(err, &ErrNoCurrentTrack{}) {
-			h.log.Error("user not listening to spotify", err)
+			slog.ErrorContext(ctx, "user not listening to spotify", slogutil.Error(err))
 			srv.JSONError(w, err, srv.Status(400))
 			return
 		} else if err != nil {
-			h.log.Error("getting current track's album", err)
+			slog.ErrorContext(ctx, "getting current track's album", slogutil.Error(err))
 			srv.InternalServerError(w)
 			return
 		}

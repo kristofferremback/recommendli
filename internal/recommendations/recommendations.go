@@ -3,12 +3,12 @@ package recommendations
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/kristofferostlund/recommendli/pkg/logging"
 	"github.com/zmb3/spotify"
 )
 
@@ -57,21 +57,19 @@ func (u UserPreferences) RecommendationPlaylistName(kind string, now time.Time) 
 }
 
 type ServiceFactory struct {
-	log             logging.Logger
 	store           KeyValueStore
 	userPreferences UserPreferenceProvider
 }
 
-func NewServiceFactory(log logging.Logger, store KeyValueStore, userPreferences UserPreferenceProvider) *ServiceFactory {
-	return &ServiceFactory{log: log, store: store, userPreferences: userPreferences}
+func NewServiceFactory(store KeyValueStore, userPreferences UserPreferenceProvider) *ServiceFactory {
+	return &ServiceFactory{store: store, userPreferences: userPreferences}
 }
 
 func (f *ServiceFactory) New(spotifyProvider SpotifyProvider) *Service {
-	return &Service{log: f.log, store: f.store, userPreferences: f.userPreferences, spotify: spotifyProvider}
+	return &Service{store: f.store, userPreferences: f.userPreferences, spotify: spotifyProvider}
 }
 
 type Service struct {
-	log             logging.Logger
 	store           KeyValueStore
 	userPreferences UserPreferenceProvider
 	spotify         SpotifyProvider
@@ -110,7 +108,7 @@ func (s *Service) GetCurrentUsersPlaylistMatchingPattern(ctx context.Context, pa
 	if err != nil {
 		return nil, fmt.Errorf("getting current user's playlists: %w", err)
 	}
-	s.log.Debug("finding playlists matching pattern", "pattern", pattern)
+	slog.Debug("finding playlists matching pattern", "pattern", pattern)
 	playlists, err := s.ListPlaylistsForCurrentUser(ctx)
 	if err != nil {
 		return nil, err
@@ -192,18 +190,18 @@ func (s *Service) CheckPlayingTrackInLibrary(ctx context.Context) (spotify.FullT
 		return spotify.FullTrack{}, nil, fmt.Errorf("populating library playlists when checking if track is in library: %w", err)
 	}
 
-	s.log.Info("tracks fully listed", "unique song count", len(indexedLibrary.Tracks), "playlist count", len(indexedLibrary.Playlists))
+	slog.InfoContext(ctx, "tracks fully listed", "unique song count", len(indexedLibrary.Tracks), "playlist count", len(indexedLibrary.Playlists))
 
 	if pls, found := indexedLibrary.Lookup(currentTrack); found {
 		playlistNames := make([]string, 0, len(pls))
 		for _, p := range pls {
 			playlistNames = append(playlistNames, p.Name)
 		}
-		s.log.Info("current track already in library", "track", stringifyTrack(currentTrack.SimpleTrack), "playlists", playlistNames)
+		slog.InfoContext(ctx, "current track already in library", "track", stringifyTrack(currentTrack.SimpleTrack), "playlists", playlistNames)
 		return currentTrack, pls, nil
 	}
 
-	s.log.Info("current track is new", "track", stringifyTrack(currentTrack.SimpleTrack))
+	slog.InfoContext(ctx, "current track is new", "track", stringifyTrack(currentTrack.SimpleTrack))
 	return currentTrack, nil, nil
 }
 
@@ -267,13 +265,13 @@ func (s *Service) generateDiscoveryPlaylist(ctx context.Context, dryRun bool) (s
 	playlistName := prefs.RecommendationPlaylistName("discovery", time.Now())
 	if dryRun {
 		dummy := dummyPlaylistFor(playlistName, tracks)
-		s.log.Info("recommendation complete, not creating playlist", "dryrun", dryRun, "playlist", dummy.Name, "tracks", printableTracks(tracksOf(dummy)), "track count", dummy.Tracks.Total)
+		slog.InfoContext(ctx, "recommendation complete, not creating playlist", "dryrun", dryRun, "playlist", dummy.Name, "tracks", printableTracks(tracksOf(dummy)), "track count", dummy.Tracks.Total)
 		return dummy, nil
 	}
 	playlist, err := s.upsertPlaylistByName(ctx, playlists, usr.ID, playlistName, trackIDsOf(tracks))
 	if err != nil {
 		return spotify.FullPlaylist{}, fmt.Errorf("setting discovery playlist %s for user %s: %w", playlistName, usr.ID, err)
 	}
-	s.log.Info("recommendation complete", "playlist", playlist.Name, "tracks", printableTracks(tracksOf(playlist)), "track count", playlist.Tracks.Total)
+	slog.InfoContext(ctx, "recommendation complete", "playlist", playlist.Name, "tracks", printableTracks(tracksOf(playlist)), "track count", playlist.Tracks.Total)
 	return playlist, nil
 }

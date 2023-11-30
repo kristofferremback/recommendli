@@ -5,28 +5,25 @@ import (
 	"fmt"
 
 	"github.com/kristofferostlund/recommendli/pkg/ctxhelper"
-	"github.com/kristofferostlund/recommendli/pkg/logging"
 	"github.com/kristofferostlund/recommendli/pkg/paginator"
 	"github.com/zmb3/spotify"
 )
 
 type SpotifyAdaptor struct {
 	spotify spotify.Client
-	log     logging.Logger
 	kv      KeyValueStore
 }
 
 type SpotifyAdaptorFactory struct {
-	log   logging.Logger
 	store KeyValueStore
 }
 
-func NewSpotifyProviderFactory(log logging.Logger, store KeyValueStore) *SpotifyAdaptorFactory {
-	return &SpotifyAdaptorFactory{log: log, store: store}
+func NewSpotifyProviderFactory(store KeyValueStore) *SpotifyAdaptorFactory {
+	return &SpotifyAdaptorFactory{store: store}
 }
 
 func (f *SpotifyAdaptorFactory) New(spotifyClient spotify.Client) *SpotifyAdaptor {
-	return &SpotifyAdaptor{spotify: spotifyClient, log: f.log, kv: f.store}
+	return &SpotifyAdaptor{spotify: spotifyClient, kv: f.store}
 }
 
 func (s *SpotifyAdaptor) CurrentUser(ctx context.Context) (spotify.User, error) {

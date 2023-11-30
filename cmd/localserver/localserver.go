@@ -3,11 +3,13 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
 	"path"
+	"strings"
 	"syscall"
 	"time"
 
@@ -16,6 +18,7 @@ import (
 	"github.com/kristofferostlund/recommendli/internal/recommendations"
 	"github.com/kristofferostlund/recommendli/pkg/keyvaluestore"
 	"github.com/kristofferostlund/recommendli/pkg/logging"
+	"github.com/kristofferostlund/recommendli/pkg/slogutil"
 	"github.com/kristofferostlund/recommendli/pkg/srv"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -38,20 +41,18 @@ func main() {
 	)
 	flag.Parse()
 
-	log := logging.New(logging.GetLevelByName(*logLevel), logging.FormatConsolePretty)
-	// nolint errcheck
-	defer log.Sync()
+	initLogger(*logLevel)
 
 	spotifyRedirectURLstr := fmt.Sprintf("%s/recommendations/v1/spotify/auth/callback", *spotifyRedirectHost)
 	redirectURL, err := url.Parse(spotifyRedirectURLstr)
 	if err != nil {
-		log.Fatal("Could not parse redirect URL", err, "spotifyRedirectSpotifyURL", spotifyRedirectURLstr)
+		slogFatal("Could not parse redirect URL", slogutil.Error(err), slog.String("spotifyRedirectSpotifyURL", spotifyRedirectURLstr))
 	}
 
 	uiRedirectURLstr := fmt.Sprintf("%s/recommendations/v1/spotify/auth/ui-redirect", *spotifyRedirectHost)
 	uiRedirectURL, err := url.Parse(uiRedirectURLstr)
 	if err != nil {
-		log.Fatal("Could not parse redirect URL", err, "spotifyRedirectSpotifyURL", spotifyRedirectURLstr)
+		slogFatal("Could not parse redirect URL", slogutil.Error(err), slog.String("spotifyRedirectSpotifyURL", spotifyRedirectURLstr))
 	}
 
 	r := chi.NewRouter()
@@ -59,18 +60,18 @@ func main() {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(50 * time.Minute))
+	r.Use(middleware.Timeout(50 * time.Minute)) // haha wow.
 
 	r.Get("/status", getStatus())
 	r.Method(http.MethodGet, "/metrics", promhttp.Handler())
 
-	authAdaptor := recommendations.NewSpotifyAuthAdaptor(clientID, clientSecret, *redirectURL, *uiRedirectURL, log)
+	authAdaptor := recommendations.NewSpotifyAuthAdaptor(clientID, clientSecret, *redirectURL, *uiRedirectURL)
 	r.Get(authAdaptor.Path(), authAdaptor.TokenCallbackHandler())
 	r.Get(authAdaptor.UIRedirectPath(), authAdaptor.UIRedirectHandler())
 
-	recommendatinsHandler, err := getRecommendationsHandler(log, authAdaptor, persistenceFactoryWith(fileCacheBaseDir))
+	recommendatinsHandler, err := getRecommendationsHandler(authAdaptor, persistenceFactoryWith(fileCacheBaseDir))
 	if err != nil {
-		log.Fatal("Setting up recommendations handler", err)
+		slogFatal("Setting up recommendations handler", slogutil.Error(err))
 	}
 	r.Mount("/recommendations", recommendatinsHandler)
 
@@ -79,7 +80,7 @@ func main() {
 
 	errs := make(chan error, 2)
 	go func() {
-		log.Info("Starting server", "addr", *addr)
+		slog.Info("Starting server", slog.String("addr", *addr))
 		errs <- http.ListenAndServe(*addr, r)
 	}()
 	go func() {
@@ -91,20 +92,19 @@ func main() {
 
 	err = <-errs
 	if err != nil && err != http.ErrServerClosed {
-		log.Fatal("Shutting down", err)
+		slogFatal("Shutting down", slogutil.Error(err))
 	}
 
-	log.Info("Server shutdown")
+	slog.Info("Server shutdown")
 }
 
-func getRecommendationsHandler(log *logging.Log, authAdaptor *recommendations.AuthAdaptor, persistedKV kvPersistenceFactory) (*chi.Mux, error) {
+func getRecommendationsHandler(authAdaptor *recommendations.AuthAdaptor, persistedKV kvPersistenceFactory) (*chi.Mux, error) {
 	serviceCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), persistedKV("cache"))
 	spotifyCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), persistedKV("spotify-provider"))
 	recommendatinsHandler := recommendations.NewRouter(
-		recommendations.NewServiceFactory(log, serviceCache, recommendations.NewDummyUserPreferenceProvider()),
-		recommendations.NewSpotifyProviderFactory(log, spotifyCache),
+		recommendations.NewServiceFactory(serviceCache, recommendations.NewDummyUserPreferenceProvider()),
+		recommendations.NewSpotifyProviderFactory(spotifyCache),
 		authAdaptor,
-		log,
 	)
 	return recommendatinsHandler, nil
 }
@@ -139,4 +139,26 @@ func getStatus() http.HandlerFunc {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.Write([]byte("OK")) // nolint
 	})
+}
+
+func initLogger(logLevel string) {
+	level, ok := map[string]slog.Level{
+		"debug": slog.LevelDebug,
+		"info":  slog.LevelInfo,
+		"warn":  slog.LevelWarn,
+		"error": slog.LevelError,
+	}[strings.ToLower(logLevel)]
+	if !ok {
+		level = slog.LevelInfo
+	}
+
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		AddSource: true,
+		Level:     level,
+	})))
+}
+
+func slogFatal(msg string, args ...interface{}) {
+	slog.Error(msg, args...)
+	os.Exit(1)
 }
