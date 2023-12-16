@@ -2,62 +2,41 @@ package slogutil
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 )
 
-// TODO: Figure out if this make sense.
+type ctxkey string
 
-var ErrKeyNotFound = errors.New("context key not found")
+const attrsKey ctxkey = "slogutil/attrs"
 
-type Key[T any] struct{}
-
-func (k Key[T]) WithValue(ctx context.Context, t T) context.Context {
-	return context.WithValue(ctx, k, t)
+func WithAttrs(ctx context.Context, newAttrs ...slog.Attr) context.Context {
+	return context.WithValue(ctx, attrsKey, append(GetAttrs(ctx), newAttrs...))
 }
 
-func (k Key[T]) Value(ctx context.Context) (T, error) {
-	t, ok := ctx.Value(k).(T)
-	if !ok {
-		// since the key is a struct{} we have no way to find out which key was not found
-		return t, ErrKeyNotFound
-	}
-
-	return t, nil
+func GetAttrs(ctx context.Context) []slog.Attr {
+	attrs, _ := ctx.Value(attrsKey).([]slog.Attr)
+	return attrs
 }
 
-func (k Key[T]) AttachToLog(key string, next slog.Handler) slog.Handler {
-	return slogHandler[T]{
-		logKey: key,
-		ctxKey: k,
-		next:   next,
-	}
+var _ slog.Handler = (*CtxHandler)(nil)
+
+type CtxHandler struct {
+	slog.Handler
 }
 
-type slogHandler[T any] struct {
-	logKey string
-	ctxKey Key[T]
-	next   slog.Handler
+func (h *CtxHandler) Handle(ctx context.Context, r slog.Record) error {
+	r.AddAttrs(GetAttrs(ctx)...)
+	return h.Handler.Handle(ctx, r)
 }
 
-func (h slogHandler[T]) Enabled(ctx context.Context, level slog.Level) bool {
-	return h.next.Enabled(ctx, level)
+func (h *CtxHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return h.Handler.Enabled(ctx, level)
 }
 
-func (h slogHandler[T]) Handle(ctx context.Context, record slog.Record) error {
-	val, ok := ctx.Value(h.ctxKey).(T)
-
-	if ok {
-		record.AddAttrs(slog.Any(h.logKey, val))
-	}
-
-	return h.next.Handle(ctx, record)
+func (h *CtxHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &CtxHandler{h.Handler.WithAttrs(attrs)}
 }
 
-func (h slogHandler[T]) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return h.ctxKey.AttachToLog(h.logKey, h.next.WithAttrs(attrs))
-}
-
-func (h slogHandler[T]) WithGroup(name string) slog.Handler {
-	return h.ctxKey.AttachToLog(h.logKey, h.next.WithGroup(name))
+func (h *CtxHandler) WithGroup(name string) slog.Handler {
+	return &CtxHandler{h.Handler.WithGroup(name)}
 }

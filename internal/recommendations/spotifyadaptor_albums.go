@@ -3,6 +3,7 @@ package recommendations
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sort"
 
 	"github.com/kristofferostlund/recommendli/pkg/ctxhelper"
@@ -110,7 +111,7 @@ func (s *SpotifyAdaptor) getAlbums(ctx context.Context, albumIDs []string) ([]sp
 				}
 				albums = append(albums, *a)
 			}
-			s.log.Debug("getting albums", "total size", len(albumIDs), "batch size", len(spotifyIDs), "from", from, "to", to)
+			slog.Debug("getting albums", "total size", len(albumIDs), "batch size", len(spotifyIDs), "from", from, "to", to)
 			albumChan <- indexAndAlbums{index, albums}
 			return next(len(albumIDs)), nil
 		})

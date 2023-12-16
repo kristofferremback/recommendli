@@ -52,7 +52,7 @@ func (h *httpHandler) withService(sHandler spotifyClientHandlerFunc) http.Handle
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		spotifyClient, err := h.auth.GetClient(r)
-		if err != nil && errors.Is(err, NoAuthenticationError) {
+		if err != nil && errors.Is(err, ErrNoAuthentication) {
 			srv.JSONError(w, fmt.Errorf("user not signed in: %w", err), srv.Status(http.StatusUnauthorized))
 		} else if err != nil {
 			slog.ErrorContext(ctx, "getting spotify client", slogutil.Error(err))

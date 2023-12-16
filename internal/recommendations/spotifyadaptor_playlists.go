@@ -3,6 +3,7 @@ package recommendations
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sort"
 
 	"github.com/kristofferostlund/recommendli/pkg/ctxhelper"
@@ -154,7 +155,7 @@ func (s *SpotifyAdaptor) getPlaylist(ctx context.Context, playlistID string) (sp
 					return nil, err
 				}
 				itChan <- indexAndTracks{i, page.Tracks}
-				s.log.Debug("listing playlist tracks", "playlist", p.Name, "counter", i, "offset", page.Offset, "total", page.Total)
+				slog.Debug("listing playlist tracks", "playlist", p.Name, "counter", i, "offset", page.Offset, "total", page.Total)
 				return next(page.Total), nil
 			})
 		})
@@ -195,7 +196,7 @@ func (s *SpotifyAdaptor) listPlaylists(ctx context.Context, userID string) ([]sp
 				return nil, err
 			}
 			ipChan <- indexAndPlaylists{i, page.Playlists}
-			s.log.Debug("listing playlists for user", "user", userID, "counter", i, "offset", page.Offset, "total", page.Total)
+			slog.Debug("listing playlists for user", "user", userID, "counter", i, "offset", page.Offset, "total", page.Total)
 			return next(page.Total), nil
 		})
 	})

@@ -29,7 +29,7 @@ const (
 	CookieSpotifyToken = "recommendli_spotifytoken"
 )
 
-var NoAuthenticationError error = errors.New("No authentication found")
+var ErrNoAuthentication error = errors.New("no authentication found")
 
 type AuthAdaptor struct {
 	authenticator              spotify.Authenticator
@@ -170,7 +170,7 @@ func (a *AuthAdaptor) Middleware() func(h http.Handler) http.Handler {
 func (a *AuthAdaptor) GetClient(r *http.Request) (spotify.Client, error) {
 	token, ok := r.Context().Value(ctxTokenKey).(*oauth2.Token)
 	if !ok {
-		return spotify.Client{}, NoAuthenticationError
+		return spotify.Client{}, ErrNoAuthentication
 	}
 	client := a.authenticator.NewClient(token)
 	client.AutoRetry = true
