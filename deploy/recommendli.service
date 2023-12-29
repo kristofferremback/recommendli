@@ -1,0 +1,12 @@
+[Unit]
+Description=Recommendli Service
+After=network.target
+
+[Service]
+EnvironmentFile=/usr/share/recommendli/.env
+ExecStart=/usr/share/recommendli/build/main
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
