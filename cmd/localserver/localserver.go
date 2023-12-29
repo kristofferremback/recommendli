@@ -46,13 +46,13 @@ func main() {
 	spotifyRedirectURLstr := fmt.Sprintf("%s/recommendations/v1/spotify/auth/callback", *spotifyRedirectHost)
 	redirectURL, err := url.Parse(spotifyRedirectURLstr)
 	if err != nil {
-		slogFatal("Could not parse redirect URL", slogutil.Error(err), slog.String("spotifyRedirectSpotifyURL", spotifyRedirectURLstr))
+		slogutil.Fatal("Could not parse redirect URL", slogutil.Error(err), slog.String("spotifyRedirectSpotifyURL", spotifyRedirectURLstr))
 	}
 
 	uiRedirectURLstr := fmt.Sprintf("%s/recommendations/v1/spotify/auth/ui-redirect", *spotifyRedirectHost)
 	uiRedirectURL, err := url.Parse(uiRedirectURLstr)
 	if err != nil {
-		slogFatal("Could not parse redirect URL", slogutil.Error(err), slog.String("spotifyRedirectSpotifyURL", spotifyRedirectURLstr))
+		slogutil.Fatal("Could not parse redirect URL", slogutil.Error(err), slog.String("spotifyRedirectSpotifyURL", spotifyRedirectURLstr))
 	}
 
 	r := chi.NewRouter()
@@ -71,7 +71,7 @@ func main() {
 
 	recommendatinsHandler, err := getRecommendationsHandler(authAdaptor, persistenceFactoryWith(fileCacheBaseDir))
 	if err != nil {
-		slogFatal("Setting up recommendations handler", slogutil.Error(err))
+		slogutil.Fatal("Setting up recommendations handler", slogutil.Error(err))
 	}
 	r.Mount("/recommendations", recommendatinsHandler)
 
@@ -92,7 +92,7 @@ func main() {
 
 	err = <-errs
 	if err != nil && err != http.ErrServerClosed {
-		slogFatal("Shutting down", slogutil.Error(err))
+		slogutil.Fatal("Shutting down", slogutil.Error(err))
 	}
 
 	slog.Info("Server shutdown")
@@ -156,9 +156,4 @@ func initLogger(logLevel string) {
 		AddSource: true,
 		Level:     level,
 	})))
-}
-
-func slogFatal(msg string, args ...interface{}) {
-	slog.Error(msg, args...)
-	os.Exit(1)
 }
