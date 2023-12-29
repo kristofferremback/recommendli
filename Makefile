@@ -1,4 +1,5 @@
-BUILD_PATH := $(realpath ./build/localserver)
+VERSION=$(shell git rev-parse --short HEAD)
+BUILD_PATH := $(realpath ./build/main)
 
 define with_env
 	$(eval include $(1))
@@ -13,13 +14,13 @@ executable-path:
 
 dev:
 	$(call with_env,./.env)
-	go run ./cmd/localserver/*.go
+	go run ./main.go
 
-build-localserver:
+build-main:
 	mkdir -p build
-	CGO_ENABLED=0 go build -o ./build/localserver -v ./cmd/localserver/*.go
+	CGO_ENABLED=0 go build -o ./build/main -v ./main.go
 
-chmod-localserver:
-	chmod +x ./build/localserver
+chmod-main:
+	chmod +x ./build/main
 
-build: build-localserver chmod-localserver
+build: build-main chmod-main

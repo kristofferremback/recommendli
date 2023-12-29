@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -9,47 +8,43 @@ import (
 	"os"
 	"os/signal"
 	"path"
-	"strings"
 	"syscall"
 	"time"
 
-	"github.com/go-chi/chi"
-	"github.com/go-chi/chi/middleware"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/kelseyhightower/envconfig"
 	"github.com/kristofferostlund/recommendli/internal/recommendations"
 	"github.com/kristofferostlund/recommendli/pkg/keyvaluestore"
-	"github.com/kristofferostlund/recommendli/pkg/logging"
 	"github.com/kristofferostlund/recommendli/pkg/slogutil"
 	"github.com/kristofferostlund/recommendli/pkg/srv"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-const (
-	defaultAddr = ":9999"
-)
-
-var defaultSpotifyRedirectHost = fmt.Sprintf("http://localhost%s", defaultAddr)
+type Config struct {
+	SpotifyClientID     string `envconfig:"SPOTIFY_ID"`
+	SpotifyClientSecret string `envconfig:"SPOTIFY_SECRET"`
+	SpotifyRedirectHost string `envconfig:"SPOTIFY_REDIRECT_HOST" default:"http://0.0.0.0:9999"`
+	LogLevel            string `envconfig:"LOG_LEVEL" default:"info"`
+	Addr                string `envconfig:"ADDR" default:"0.0.0.0:9999"`
+	FileCacheBaseDir    string `envconfig:"FILE_CACHE_BASE_DIR" default:"/tmp/recommendli"`
+}
 
 func main() {
-	var (
-		addr                = flag.String("addr", defaultAddr, "HTTP address")
-		spotifyRedirectHost = flag.String("spotify-redirect-host", defaultSpotifyRedirectHost, "Spotify redirect host")
-		logLevel            = flag.String("log-level", logging.LevelInfo.String(), "log level")
+	cfg, err := loadConfig()
+	if err != nil {
+		slogutil.Fatal("Could not load config", slogutil.Error(err))
+	}
 
-		clientID         = envString("SPOTIFY_ID", "")
-		clientSecret     = envString("SPOTIFY_SECRET", "")
-		fileCacheBaseDir = envString("FILE_CACHE_BASE_DIR", defaultCacheDir())
-	)
-	flag.Parse()
+	slogutil.InitDefaultLogger(cfg.LogLevel)
 
-	initLogger(*logLevel)
-
-	spotifyRedirectURLstr := fmt.Sprintf("%s/recommendations/v1/spotify/auth/callback", *spotifyRedirectHost)
+	spotifyRedirectURLstr := fmt.Sprintf("%s/recommendations/v1/spotify/auth/callback", cfg.SpotifyRedirectHost)
 	redirectURL, err := url.Parse(spotifyRedirectURLstr)
 	if err != nil {
 		slogutil.Fatal("Could not parse redirect URL", slogutil.Error(err), slog.String("spotifyRedirectSpotifyURL", spotifyRedirectURLstr))
 	}
 
-	uiRedirectURLstr := fmt.Sprintf("%s/recommendations/v1/spotify/auth/ui-redirect", *spotifyRedirectHost)
+	uiRedirectURLstr := fmt.Sprintf("%s/recommendations/v1/spotify/auth/ui-redirect", cfg.SpotifyRedirectHost)
 	uiRedirectURL, err := url.Parse(uiRedirectURLstr)
 	if err != nil {
 		slogutil.Fatal("Could not parse redirect URL", slogutil.Error(err), slog.String("spotifyRedirectSpotifyURL", spotifyRedirectURLstr))
@@ -65,11 +60,11 @@ func main() {
 	r.Get("/status", getStatus())
 	r.Method(http.MethodGet, "/metrics", promhttp.Handler())
 
-	authAdaptor := recommendations.NewSpotifyAuthAdaptor(clientID, clientSecret, *redirectURL, *uiRedirectURL)
+	authAdaptor := recommendations.NewSpotifyAuthAdaptor(cfg.SpotifyClientID, cfg.SpotifyClientSecret, *redirectURL, *uiRedirectURL)
 	r.Get(authAdaptor.Path(), authAdaptor.TokenCallbackHandler())
 	r.Get(authAdaptor.UIRedirectPath(), authAdaptor.UIRedirectHandler())
 
-	recommendatinsHandler, err := getRecommendationsHandler(authAdaptor, persistenceFactoryWith(fileCacheBaseDir))
+	recommendatinsHandler, err := getRecommendationsHandler(authAdaptor, persistenceFactoryWith(cfg.FileCacheBaseDir))
 	if err != nil {
 		slogutil.Fatal("Setting up recommendations handler", slogutil.Error(err))
 	}
@@ -80,8 +75,8 @@ func main() {
 
 	errs := make(chan error, 2)
 	go func() {
-		slog.Info("Starting server", slog.String("addr", *addr))
-		errs <- http.ListenAndServe(*addr, r)
+		slog.Info("Starting server", slog.String("addr", cfg.Addr))
+		errs <- http.ListenAndServe(cfg.Addr, r)
 	}()
 	go func() {
 		c := make(chan os.Signal, 1)
@@ -117,23 +112,6 @@ func persistenceFactoryWith(fileCacheBaseDir string) kvPersistenceFactory {
 	}
 }
 
-func envString(env, fallback string) string {
-	if e := os.Getenv(env); e != "" {
-		return e
-	}
-	return fallback
-}
-
-func defaultCacheDir() string {
-	var baseDir string
-	if homeDir, err := os.UserHomeDir(); err != nil {
-		baseDir, _ = os.Getwd()
-	} else {
-		baseDir = homeDir
-	}
-	return path.Join(baseDir, ".recommendli")
-}
-
 func getStatus() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -141,19 +119,11 @@ func getStatus() http.HandlerFunc {
 	})
 }
 
-func initLogger(logLevel string) {
-	level, ok := map[string]slog.Level{
-		"debug": slog.LevelDebug,
-		"info":  slog.LevelInfo,
-		"warn":  slog.LevelWarn,
-		"error": slog.LevelError,
-	}[strings.ToLower(logLevel)]
-	if !ok {
-		level = slog.LevelInfo
+func loadConfig() (Config, error) {
+	var cfg Config
+	err := envconfig.Process("", &cfg)
+	if err != nil {
+		return cfg, fmt.Errorf("loading config: %w", err)
 	}
-
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		AddSource: true,
-		Level:     level,
-	})))
+	return cfg, nil
 }

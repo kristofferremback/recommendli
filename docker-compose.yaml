@@ -1,0 +1,21 @@
+version: '3.9'
+
+services:
+  recommendli:
+    image: recommendli:${VERSION:-latest}
+    build:
+      dockerfile: Dockerfile
+      context: .
+    container_name: recommendli
+    restart: unless-stopped
+    ports:
+      - 9999:9999
+    environment:
+      SPOTIFY_ID: ${SPOTIFY_ID}
+      SPOTIFY_SECRET: ${SPOTIFY_SECRET}
+      SPOTIFY_REDIRECT_HOST: ${SPOTIFY_REDIRECT_HOST:-}
+      ADDR: ${ADDR:-0.0.0.0:9999}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      FILE_CACHE_BASE_DIR: /var/recommendli
+    volumes:
+      - ./data:/var/recommendli

@@ -69,7 +69,7 @@ func (a *AuthAdaptor) TokenCallbackHandler() http.HandlerFunc {
 		ctx := r.Context()
 		c, _ := r.Cookie(CookieState)
 		if c == nil || c.Value == "" {
-			slog.ErrorContext(ctx, "Missing required cookie", slogutil.Error(fmt.Errorf("Missing required cookie %s", CookieState)))
+			slog.ErrorContext(ctx, "Missing required cookie", slogutil.Error(fmt.Errorf("missing required cookie %s", CookieState)))
 			srv.InternalServerError(w)
 			return
 		}
