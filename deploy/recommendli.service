@@ -5,6 +5,7 @@ After=network.target
 [Service]
 EnvironmentFile=/usr/share/recommendli/.env
 ExecStart=/usr/share/recommendli/build/main
+WorkingDirectory=/usr/share/recommendli
 Restart=on-failure
 RestartSec=5s
 
