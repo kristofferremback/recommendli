@@ -6,8 +6,10 @@ After=network.target
 EnvironmentFile=/usr/share/recommendli/.env
 ExecStart=/usr/share/recommendli/build/main
 WorkingDirectory=/usr/share/recommendli
-Restart=on-failure
+Restart=always
 RestartSec=5s
+
+MemoryMax=750M
 
 [Install]
 WantedBy=multi-user.target
