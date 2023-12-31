@@ -173,21 +173,9 @@ func (s *Service) CheckPlayingTrackInLibrary(ctx context.Context) (spotify.FullT
 		return spotify.FullTrack{}, nil, ErrNoCurrentTrack{usr: usr}
 	}
 
-	playlists, err := s.spotify.ListPlaylists(ctx, usr.ID)
+	indexedLibrary, err := s.trackIndexFor(ctx, usr)
 	if err != nil {
-		return spotify.FullTrack{}, nil, fmt.Errorf("listing user playlists checking if track is in library: %w", err)
-	}
-	prefs, err := s.userPreferences.GetPreferences(ctx, usr.ID)
-	if err != nil {
-		return spotify.FullTrack{}, nil, fmt.Errorf("getting user prefences: %w", err)
-	}
-	libraryPlaylists := filterSimplePlaylist(playlists, func(p spotify.SimplePlaylist) bool {
-		return prefs.IsLibraryPlaylistName(p.Name)
-	})
-
-	indexedLibrary, err := s.getStoredTrackPlaylistIndex(ctx, usr, libraryPlaylists)
-	if err != nil {
-		return spotify.FullTrack{}, nil, fmt.Errorf("populating library playlists when checking if track is in library: %w", err)
+		return spotify.FullTrack{}, nil, fmt.Errorf("getting track index: %w", err)
 	}
 
 	slog.InfoContext(ctx, "tracks fully listed", "unique song count", len(indexedLibrary.Tracks), "playlist count", len(indexedLibrary.Playlists))
@@ -211,6 +199,45 @@ func (s *Service) CreateDiscoveryPlaylist(ctx context.Context) (spotify.FullPlay
 
 func (s *Service) DryRunDiscoveryPlaylist(ctx context.Context) (spotify.FullPlaylist, error) {
 	return s.generateDiscoveryPlaylist(ctx, true)
+}
+
+func (s *Service) GetIndexSummary(ctx context.Context) (IndexSummary, error) {
+	usr, err := s.GetCurrentUser(ctx)
+	if err != nil {
+		return IndexSummary{}, fmt.Errorf("getting user: %w", err)
+	}
+
+	indexedLibrary, err := s.trackIndexFor(ctx, usr)
+	if err != nil {
+		return IndexSummary{}, fmt.Errorf("getting track index for user: %w", err)
+	}
+
+	summary := IndexSummary{
+		UniqueTracks: len(indexedLibrary.Tracks),
+		Playlists:    len(indexedLibrary.Playlists),
+	}
+
+	return summary, nil
+}
+
+func (s *Service) trackIndexFor(ctx context.Context, usr spotify.User) (*TrackPlaylistIndex, error) {
+	playlists, err := s.spotify.ListPlaylists(ctx, usr.ID)
+	if err != nil {
+		return nil, fmt.Errorf("listing user playlists: %w", err)
+	}
+	prefs, err := s.userPreferences.GetPreferences(ctx, usr.ID)
+	if err != nil {
+		return nil, fmt.Errorf("getting user prefences: %w", err)
+	}
+	libraryPlaylists := filterSimplePlaylist(playlists, func(p spotify.SimplePlaylist) bool {
+		return prefs.IsLibraryPlaylistName(p.Name)
+	})
+
+	indexedLibrary, err := s.getStoredTrackPlaylistIndex(ctx, usr, libraryPlaylists)
+	if err != nil {
+		return nil, fmt.Errorf("populating library playlists when checking if track is in library: %w", err)
+	}
+	return indexedLibrary, nil
 }
 
 func (s *Service) generateDiscoveryPlaylist(ctx context.Context, dryRun bool) (spotify.FullPlaylist, error) {

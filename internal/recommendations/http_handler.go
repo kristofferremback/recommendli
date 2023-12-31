@@ -36,6 +36,7 @@ func NewRouter(svcFactory *ServiceFactory, spotifyProviderFactory *SpotifyAdapto
 	ar.Get("/v1/playlists", handler.withService(handler.listPlaylists))
 	ar.Get("/v1/playlists/for", handler.withService(handler.getPlaylistMatchingPattern))
 	ar.Get("/v1/playlists/{playlistID}", handler.withService(handler.getPlaylist))
+	ar.Get("/v1/index/summary", handler.withService(handler.getIndexSummary))
 
 	return r
 }
@@ -213,5 +214,21 @@ func (h *httpHandler) getCurrentTrack(svc *Service) http.HandlerFunc {
 			Track     *spotify.FullTrack `json:"track"`
 			IsPlaying bool               `json:"is_playing"`
 		}{ptrTrack, isPlaying})
+	}
+}
+
+func (h *httpHandler) getIndexSummary(svc *Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		summary, err := svc.GetIndexSummary(ctx)
+		if err != nil {
+			slog.ErrorContext(ctx, "starting indexing", slogutil.Error(err))
+			srv.InternalServerError(w)
+			return
+		}
+		srv.JSON(w, struct {
+			Playlists    int `json:"playlists"`
+			UniqueTracks int `json:"unique_tracks"`
+		}{Playlists: summary.Playlists, UniqueTracks: summary.UniqueTracks})
 	}
 }
