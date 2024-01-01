@@ -10,6 +10,9 @@ import (
 	"time"
 
 	"github.com/zmb3/spotify"
+
+	"github.com/kristofferostlund/recommendli/pkg/maputil"
+	"github.com/kristofferostlund/recommendli/pkg/sortby"
 )
 
 type KeyValueStore interface {
@@ -212,9 +215,15 @@ func (s *Service) GetIndexSummary(ctx context.Context) (IndexSummary, error) {
 		return IndexSummary{}, fmt.Errorf("getting track index for user: %w", err)
 	}
 
+	playlists := maputil.Values(indexedLibrary.Playlists)
+	sort.Slice(playlists, func(i, j int) bool {
+		return sortby.PaddedNumbers(playlists[i].Name, playlists[j].Name, 10, true)
+	})
+
 	summary := IndexSummary{
-		UniqueTracks: len(indexedLibrary.Tracks),
-		Playlists:    len(indexedLibrary.Playlists),
+		UniqueTrackCount: len(indexedLibrary.Tracks),
+		PlaylistCount:    len(indexedLibrary.Playlists),
+		Playlists:        playlists,
 	}
 
 	return summary, nil

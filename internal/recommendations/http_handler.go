@@ -227,8 +227,13 @@ func (h *httpHandler) getIndexSummary(svc *Service) http.HandlerFunc {
 			return
 		}
 		srv.JSON(w, struct {
-			Playlists    int `json:"playlists"`
-			UniqueTracks int `json:"unique_tracks"`
-		}{Playlists: summary.Playlists, UniqueTracks: summary.UniqueTracks})
+			UniqueTrackCount int                      `json:"unique_track_count"`
+			PlaylistCount    int                      `json:"playlist_count"`
+			Playlists        []spotify.SimplePlaylist `json:"playlists"`
+		}{
+			PlaylistCount:    summary.PlaylistCount,
+			UniqueTrackCount: summary.UniqueTrackCount,
+			Playlists:        summary.Playlists,
+		})
 	}
 }

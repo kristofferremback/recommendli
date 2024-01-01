@@ -35,6 +35,10 @@ import { throwOn404, redirectingFetch } from './redirecting-fetch.js'
  * @property {string} name
  * @property {ExternalUrls} external_urls
  *
+ * @typedef IndexSummary
+ * @property {number} playlist_count
+ * @property {number} unique_track_count
+ * @property {SimplePlaylist[]} playlists
  */
 
 const recommendliClient = {
@@ -77,6 +81,14 @@ const recommendliClient = {
       track,
       playlists: !playlists ? [] : playlists.map((p) => ({ ...p, tracks: undefined })),
     }
+  },
+
+  /**
+   * @returns {Promise<IndexSummary>}
+   */
+  getIndexSummary: async () => {
+    const response = await throwOn404(redirectingFetch('/recommendations/v1/index/summary'))
+    return await response.json()
   },
 }
 

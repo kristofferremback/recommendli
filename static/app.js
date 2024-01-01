@@ -9,9 +9,10 @@ import { selectCurrentUser } from './store/user/user.selectors.js'
 
 import DiscoveryPlaylist from './components/discovery-playlist/discovery-playlist.component.js'
 
-import { generateDiscoveryPlaylistAsync } from './store/generate/generate.actions.js'
+import { generateDiscoveryPlaylistAsync, getIndexSummaryAsync } from './store/generate/generate.actions.js'
 import { selectDiscoveryIsLoading, selectDiscoveryPlaylist } from './store/generate/generate.selectors.js'
 import PlayingContainer from './components/playing/playing.container.js'
+import IndexSummaryContainer from './components/index-summary/index-summary.container.js'
 
 const App = () => {
   /**
@@ -49,6 +50,7 @@ const App = () => {
           playlist=${discoveryPlaylist}
         />
         <${PlayingContainer} />
+        <${IndexSummaryContainer} />
       </div>
       <div>
         <details>

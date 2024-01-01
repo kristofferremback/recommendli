@@ -15,8 +15,9 @@ type TrackPlaylistIndex struct {
 }
 
 type IndexSummary struct {
-	Playlists    int
-	UniqueTracks int
+	PlaylistCount    int
+	UniqueTrackCount int
+	Playlists        []spotify.SimplePlaylist
 }
 
 func NewTrackPlaylistIndexFromFullPlaylists(playlists []spotify.FullPlaylist) *TrackPlaylistIndex {
