@@ -57,7 +57,7 @@ func (h *httpHandler) withService(sHandler spotifyClientHandlerFunc) http.Handle
 			srv.JSONError(w, fmt.Errorf("user not signed in: %w", err), srv.Status(http.StatusUnauthorized))
 		} else if err != nil {
 			slog.ErrorContext(ctx, "getting spotify client", slogutil.Error(err))
-			srv.InternalServerError(w)
+			srv.InternalServerError(w, err)
 			return
 		}
 		sHandler(h.svcFactory.New(h.spotifyProviderFactory.New(spotifyClient)))(w, r)
@@ -70,7 +70,7 @@ func (h *httpHandler) whoami(svc *Service) http.HandlerFunc {
 		usr, err := svc.GetCurrentUser(ctx)
 		if err != nil {
 			slog.ErrorContext(ctx, "getting current user", slogutil.Error(err))
-			srv.InternalServerError(w)
+			srv.InternalServerError(w, err)
 			return
 		}
 		srv.JSON(w, usr)
@@ -83,7 +83,7 @@ func (h *httpHandler) listPlaylists(svc *Service) http.HandlerFunc {
 		playlists, err := svc.ListPlaylistsForCurrentUser(ctx)
 		if err != nil {
 			slog.ErrorContext(ctx, "getting user's playlists", slogutil.Error(err))
-			srv.InternalServerError(w)
+			srv.InternalServerError(w, err)
 			return
 		}
 		sort.Slice(playlists, func(i, j int) bool {
@@ -104,7 +104,7 @@ func (h *httpHandler) getPlaylistMatchingPattern(svc *Service) http.HandlerFunc 
 		playlists, err := svc.GetCurrentUsersPlaylistMatchingPattern(ctx, pattern)
 		if err != nil {
 			slog.ErrorContext(ctx, "getting user's playlists", slogutil.Error(err))
-			srv.InternalServerError(w)
+			srv.InternalServerError(w, err)
 			return
 		}
 		sort.Slice(playlists, func(i, j int) bool {
@@ -125,7 +125,7 @@ func (h *httpHandler) getPlaylist(svc *Service) http.HandlerFunc {
 		playlist, err := svc.GetPlaylist(ctx, playlistID)
 		if err != nil {
 			slog.ErrorContext(ctx, "getting user's playlists", slogutil.Error(err))
-			srv.InternalServerError(w)
+			srv.InternalServerError(w, err)
 			return
 		}
 		srv.JSON(w, playlist)
@@ -142,7 +142,7 @@ func (h *httpHandler) checkCurrentTrackInLibrary(svc *Service) http.HandlerFunc 
 			return
 		} else if err != nil {
 			slog.ErrorContext(ctx, "checking current track in library", slogutil.Error(err))
-			srv.InternalServerError(w)
+			srv.InternalServerError(w, err)
 			return
 		}
 		srv.JSON(w, struct {
@@ -168,7 +168,7 @@ func (h *httpHandler) generateDiscoveryPlaylist(svc *Service) http.HandlerFunc {
 
 		if err != nil {
 			slog.ErrorContext(ctx, "generating discovery playlist", slogutil.Error(err))
-			srv.InternalServerError(w)
+			srv.InternalServerError(w, err)
 			return
 		}
 		srv.JSON(w, playlist)
@@ -185,7 +185,7 @@ func (h *httpHandler) getAlbumForCurrentTrack(svc *Service) http.HandlerFunc {
 			return
 		} else if err != nil {
 			slog.ErrorContext(ctx, "getting current track's album", slogutil.Error(err))
-			srv.InternalServerError(w)
+			srv.InternalServerError(w, err)
 			return
 		}
 		srv.JSON(w, album)
@@ -202,7 +202,7 @@ func (h *httpHandler) getCurrentTrack(svc *Service) http.HandlerFunc {
 			return
 		} else if err != nil {
 			slog.ErrorContext(ctx, "getting current track's album", slogutil.Error(err))
-			srv.InternalServerError(w)
+			srv.InternalServerError(w, err)
 			return
 		}
 
@@ -223,7 +223,7 @@ func (h *httpHandler) getIndexSummary(svc *Service) http.HandlerFunc {
 		summary, err := svc.GetIndexSummary(ctx)
 		if err != nil {
 			slog.ErrorContext(ctx, "starting indexing", slogutil.Error(err))
-			srv.InternalServerError(w)
+			srv.InternalServerError(w, err)
 			return
 		}
 		srv.JSON(w, struct {

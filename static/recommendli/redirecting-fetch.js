@@ -24,10 +24,11 @@ export const throwOn404 = async (promise) => {
   }
 
   const error = new Error(`Unexpected status ${response.status} - ${response.statusText}`)
-  if (response.headers.get('content-type') === 'application/json') {
+  try {
     const body = await response.json()
     // @ts-ignore
     error.body = body
-  }
+  } catch (error) {}
+
   throw error
 }

@@ -69,8 +69,9 @@ func (a *AuthAdaptor) TokenCallbackHandler() http.HandlerFunc {
 		ctx := r.Context()
 		c, _ := r.Cookie(CookieState)
 		if c == nil || c.Value == "" {
-			slog.ErrorContext(ctx, "Missing required cookie", slogutil.Error(fmt.Errorf("missing required cookie %s", CookieState)))
-			srv.InternalServerError(w)
+			err := fmt.Errorf("missing required cookie %s", CookieState)
+			slog.ErrorContext(ctx, "Missing required cookie", slogutil.Error(err))
+			srv.InternalServerError(w, err)
 			return
 		}
 
@@ -78,21 +79,21 @@ func (a *AuthAdaptor) TokenCallbackHandler() http.HandlerFunc {
 		srv.ClearCookie(w, c)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to escape state", slog.Any("error", err))
-			srv.InternalServerError(w)
+			srv.InternalServerError(w, err)
 			return
 		}
 
 		token, err := a.authenticator.Token(state, r)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to get token", slogutil.Error(err))
-			srv.InternalServerError(w)
+			srv.InternalServerError(w, err)
 			return
 		}
 
 		tokenB, err := json.Marshal(token)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to marshal token", slogutil.Error(err))
-			srv.InternalServerError(w)
+			srv.InternalServerError(w, err)
 			return
 		}
 
@@ -113,7 +114,7 @@ func (a *AuthAdaptor) TokenCallbackHandler() http.HandlerFunc {
 			srv.ClearCookie(w, gc)
 			if err != nil {
 				slog.ErrorContext(ctx, "Failed to get token", slogutil.Error(err))
-				srv.InternalServerError(w)
+				srv.InternalServerError(w, err)
 				return
 			}
 

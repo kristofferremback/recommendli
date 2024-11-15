@@ -280,9 +280,17 @@ func (s *Service) generateDiscoveryPlaylist(ctx context.Context, dryRun bool) (s
 	if err != nil {
 		return spotify.FullPlaylist{}, fmt.Errorf("populating discovery playlists when generating discovery playlist: %w", err)
 	}
-	candidates := filterTracks(uniqueTracks(tracksFor(populatedDiscovery)), func(t spotify.FullTrack) bool {
-		return !indexedLibrary.Has(t)
-	})
+
+	slog.DebugContext(ctx, "discovery playlists fully listed", "unique song count", len(uniqueTracks(tracksFor(populatedDiscovery))), "playlist count", len(populatedDiscovery))
+	candidates := make([]spotify.FullTrack, 0)
+	for _, t := range uniqueTracks(tracksFor(populatedDiscovery)) {
+		has := indexedLibrary.Has(t)
+		slog.DebugContext(ctx, "candidate track", "track", stringifyTrack(t.SimpleTrack), "in_library", has)
+		if !has {
+			candidates = append(candidates, t)
+		}
+	}
+
 	scores, err := s.scoreTracks(ctx, candidates, countArtistTracks(simpleTrackMapToSlice(indexedLibrary.Tracks)))
 	if err != nil {
 		return spotify.FullPlaylist{}, fmt.Errorf("getting most relevant versions of tracks when generating discovery playlist: %w", err)
@@ -293,7 +301,9 @@ func (s *Service) generateDiscoveryPlaylist(ctx context.Context, dryRun bool) (s
 	})
 	tracks := make([]spotify.FullTrack, 0)
 	for _, s := range scores {
-		if s.keep(prefs) {
+		keep := s.keep(prefs)
+		slog.DebugContext(ctx, "track score", "track", stringifyTrack(s.track.SimpleTrack), "score", s.calculate(prefs), "keep", keep)
+		if keep {
 			tracks = append(tracks, s.track)
 		}
 	}

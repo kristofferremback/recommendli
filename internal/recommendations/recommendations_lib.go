@@ -9,7 +9,6 @@ import (
 
 	"github.com/kristofferostlund/recommendli/pkg/paginator"
 	"github.com/zmb3/spotify"
-	"golang.org/x/sync/errgroup"
 )
 
 func (s *Service) getStoredTrackPlaylistIndex(ctx context.Context, usr spotify.User, simplePlaylists []spotify.SimplePlaylist) (*TrackPlaylistIndex, error) {
@@ -41,6 +40,7 @@ func (s *Service) getStoredTrackPlaylistIndex(ctx context.Context, usr spotify.U
 }
 
 func (s *Service) albumForTrack(ctx context.Context, track spotify.FullTrack) (spotify.FullAlbum, error) {
+	slog.DebugContext(ctx, "getting album for track", "track", stringifyTrack(track.SimpleTrack), "album", track.Album.Name, "album_id", track.Album.ID.String())
 	album, err := s.spotify.GetAlbum(ctx, track.Album.ID.String())
 	if err != nil {
 		return spotify.FullAlbum{}, fmt.Errorf("getting album for track %s: %w", track.ID, err)
@@ -138,13 +138,23 @@ func (s *Service) scoreTracks(ctx context.Context, tracks []spotify.FullTrack, a
 		paginator.InitialTotalCount(len(tracks)),
 	)
 	trackChan := make(chan indexAndTrack)
-	g, ctx := errgroup.WithContext(ctx)
-	g.Go(func() error {
+
+	errC := make(chan error)
+	done := make(chan struct{})
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	go func() {
 		defer close(trackChan)
-		return pgtr.Run(ctx, func(i int, opts paginator.PageOpts, next paginator.NextFunc) (result *paginator.NextResult, err error) {
+		if err := pgtr.Run(ctx, func(i int, opts paginator.PageOpts, next paginator.NextFunc) (result *paginator.NextResult, err error) {
 			scores := make([]score, 0)
 			from, to := opts.Offset, opts.Offset+opts.Limit
 			for _, t := range tracks[from:to] {
+				if t.ID.String() == "" {
+					slog.DebugContext(ctx, "skipping track with empty ID", "track", stringifyTrack(t.SimpleTrack))
+					continue
+				}
 				track, album, err := s.trackAndAlbum(ctx, t)
 				if err != nil {
 					return nil, err
@@ -158,17 +168,34 @@ func (s *Service) scoreTracks(ctx context.Context, tracks []spotify.FullTrack, a
 			slog.DebugContext(ctx, "getting most relevant tracks", "total count", len(tracks), "batch size", to-from, "from", from, "to", to)
 			trackChan <- indexAndTrack{i, scores}
 			return next(len(tracks)), nil
-		})
-	})
+		}); err != nil {
+			errC <- err
+			return
+		}
+
+		done <- struct{}{}
+	}()
 
 	indexedScores := make([]indexAndTrack, 0)
-	for it := range trackChan {
-		indexedScores = append(indexedScores, it)
+loop:
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case err := <-errC:
+			return nil, err
+		case it := <-trackChan:
+			indexedScores = append(indexedScores, it)
+		case <-done:
+			break loop
+		}
 	}
+
 	mostRelevant := make([]score, 0)
 	for _, indexed := range indexedScores {
 		mostRelevant = append(mostRelevant, indexed.scores...)
 	}
+
 	return mostRelevant, nil
 }
 
@@ -268,7 +295,15 @@ func stringifyTrack(t spotify.SimpleTrack) string {
 	}
 	sort.Strings(artistNames)
 
-	return fmt.Sprintf("%s - %s", t.Name, strings.Join(artistNames, ", "))
+	name, artists := t.Name, strings.Join(artistNames, ", ")
+	if name == "" {
+		name = "<Unknown track>"
+	}
+	if artists == "" {
+		artists = "<Unknown artist>"
+	}
+
+	return fmt.Sprintf("%s - %s", name, artists)
 }
 
 func printableTrack(t spotify.SimpleTrack) string {

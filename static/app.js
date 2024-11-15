@@ -8,6 +8,7 @@ import { states } from './store/lib/with-fetch-state.js'
 import { selectCurrentUser } from './store/user/user.selectors.js'
 
 import DiscoveryPlaylist from './components/discovery-playlist/discovery-playlist.component.js'
+import StateDump from './components/state-dump/state-dump.component.js'
 
 import { generateDiscoveryPlaylistAsync, getIndexSummaryAsync } from './store/generate/generate.actions.js'
 import { selectDiscoveryIsLoading, selectDiscoveryPlaylist } from './store/generate/generate.selectors.js'
@@ -52,12 +53,7 @@ const App = () => {
         <${PlayingContainer} />
         <${IndexSummaryContainer} />
       </div>
-      <div>
-        <details>
-          <summary>Show entire state</summary>
-          <pre>${JSON.stringify(state, null, 4)}</pre>
-        </details>
-      </div>
+      <div><${StateDump} state=${state} /></div>
     </div>
   `
 }

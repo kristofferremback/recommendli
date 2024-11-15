@@ -2,10 +2,11 @@ package srv
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
-	"github.com/kristofferostlund/recommendli/pkg/logging"
+	"github.com/kristofferostlund/recommendli/pkg/slogutil"
 )
 
 type ResponseOpts struct {
@@ -33,15 +34,16 @@ func Status(status int) ResponseOptFunc {
 	}
 }
 
-func InternalServerError(w http.ResponseWriter) {
-	respond(w, []byte("Internal server error"), Status(http.StatusInternalServerError), ApplicationPlainText())
+func InternalServerError(w http.ResponseWriter, err error) {
+	b, _ := json.Marshal(map[string]string{"message": "Internal server error", "error": err.Error()})
+	respond(w, b, Status(http.StatusInternalServerError), ApplicationTypeJSON())
 }
 
 func JSON(w http.ResponseWriter, data interface{}, opts ...ResponseOptFunc) {
 	b, err := json.Marshal(data)
 	if err != nil {
-		logging.GlobaLogger.Error("Failed to marshal data", err)
-		InternalServerError(w)
+		slog.Error("Failed to marshal data when	 responding with JSON", slogutil.Error(err))
+		InternalServerError(w, err)
 		return
 	}
 
