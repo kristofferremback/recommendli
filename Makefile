@@ -1,4 +1,4 @@
-VERSION=$(shell git rev-parse --short HEAD)
+	VERSION=$(shell git rev-parse --short HEAD)
 BUILD_PATH := $(realpath ./build/main)
 
 define with_env
@@ -18,7 +18,7 @@ dev:
 
 build-main:
 	mkdir -p build
-	CGO_ENABLED=0 go build -o ./build/main -v ./main.go
+	CGO_ENABLED=1 go build -o ./build/main -v ./main.go
 
 chmod-main:
 	chmod +x ./build/main
