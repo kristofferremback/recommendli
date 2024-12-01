@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"path/filepath"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -16,7 +18,9 @@ import (
 	"github.com/kelseyhightower/envconfig"
 	"github.com/kristofferostlund/recommendli/internal/recommendations"
 	"github.com/kristofferostlund/recommendli/pkg/keyvaluestore"
+	"github.com/kristofferostlund/recommendli/pkg/migrations"
 	"github.com/kristofferostlund/recommendli/pkg/slogutil"
+	"github.com/kristofferostlund/recommendli/pkg/sqlite"
 	"github.com/kristofferostlund/recommendli/pkg/srv"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -28,7 +32,10 @@ type Config struct {
 	LogLevel            string `envconfig:"LOG_LEVEL" default:"info"`
 	Addr                string `envconfig:"ADDR" default:"0.0.0.0:9999"`
 	FileCacheBaseDir    string `envconfig:"FILE_CACHE_BASE_DIR" default:"/tmp/recommendli"`
+	SQLiteDBPath        string `envconfig:"SQLITE_DB_PATH" default:"/tmp/recommendli.sqlite"`
 }
+
+var migrationsDir = fmt.Sprintf("file://%s", absolutePathTo("./migrations"))
 
 func main() {
 	cfg, err := loadConfig()
@@ -37,6 +44,17 @@ func main() {
 	}
 
 	slogutil.InitDefaultLogger(cfg.LogLevel)
+
+	if err := migrations.Up(migrationsDir, fmt.Sprintf("sqlite3://%s", cfg.SQLiteDBPath)); err != nil {
+		slogutil.Fatal("Running migrations", slogutil.Error(err))
+	}
+
+	sqliteDB, err := sqlite.Open(cfg.SQLiteDBPath)
+	if err != nil {
+		slogutil.Fatal("Could not open sqlite database", slogutil.Error(err))
+	}
+	defer sqliteDB.Close()
+	db := sqlite.Wrap(sqliteDB)
 
 	spotifyRedirectURLstr := fmt.Sprintf("%s/recommendations/v1/spotify/auth/callback", cfg.SpotifyRedirectHost)
 	redirectURL, err := url.Parse(spotifyRedirectURLstr)
@@ -64,7 +82,7 @@ func main() {
 	r.Get(authAdaptor.Path(), authAdaptor.TokenCallbackHandler())
 	r.Get(authAdaptor.UIRedirectPath(), authAdaptor.UIRedirectHandler())
 
-	recommendatinsHandler, err := getRecommendationsHandler(authAdaptor, persistenceFactoryWith(cfg.FileCacheBaseDir))
+	recommendatinsHandler, err := getRecommendationsHandler(authAdaptor, sqlitePeristenceFactory(db))
 	if err != nil {
 		slogutil.Fatal("Setting up recommendations handler", slogutil.Error(err))
 	}
@@ -94,8 +112,9 @@ func main() {
 }
 
 func getRecommendationsHandler(authAdaptor *recommendations.AuthAdaptor, persistedKV kvPersistenceFactory) (*chi.Mux, error) {
-	serviceCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), persistedKV("cache"))
-	spotifyCache := keyvaluestore.Combine(keyvaluestore.InMemoryStore(), persistedKV("spotify-provider"))
+	serviceCache := persistedKV("cache")
+	spotifyCache := persistedKV("spotify-provider")
+
 	recommendatinsHandler := recommendations.NewRouter(
 		recommendations.NewServiceFactory(serviceCache, recommendations.NewDummyUserPreferenceProvider()),
 		recommendations.NewSpotifyProviderFactory(spotifyCache),
@@ -106,9 +125,9 @@ func getRecommendationsHandler(authAdaptor *recommendations.AuthAdaptor, persist
 
 type kvPersistenceFactory func(prefix string) keyvaluestore.KV
 
-func persistenceFactoryWith(fileCacheBaseDir string) kvPersistenceFactory {
-	return func(prefix string) keyvaluestore.KV {
-		return keyvaluestore.JSONDiskStore(path.Join(fileCacheBaseDir, "recommendations", prefix))
+func sqlitePeristenceFactory(db *sqlite.DB) kvPersistenceFactory {
+	return func(kind string) keyvaluestore.KV {
+		return sqlite.NewKV(db, kind)
 	}
 }
 
@@ -126,4 +145,9 @@ func loadConfig() (Config, error) {
 		return cfg, fmt.Errorf("loading config: %w", err)
 	}
 	return cfg, nil
+}
+
+func absolutePathTo(relative string) string {
+	_, filename, _, _ := runtime.Caller(0)
+	return filepath.Clean(path.Join(path.Dir(filename), relative))
 }

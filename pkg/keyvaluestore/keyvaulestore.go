@@ -13,5 +13,4 @@ type Serializer interface {
 type KV interface {
 	Get(ctx context.Context, key string, out interface{}) (bool, error)
 	Put(ctx context.Context, key string, data interface{}) error
-	List(ctx context.Context) ([]string, error)
 }

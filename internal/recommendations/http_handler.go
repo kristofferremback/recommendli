@@ -1,6 +1,7 @@
 package recommendations
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -47,7 +48,20 @@ type httpHandler struct {
 	auth                   *AuthAdaptor
 }
 
-type spotifyClientHandlerFunc func(svc *Service) http.HandlerFunc
+type Service interface {
+	CheckPlayingTrackInLibrary(ctx context.Context) (spotify.FullTrack, []spotify.SimplePlaylist, error)
+	CreateDiscoveryPlaylist(ctx context.Context) (spotify.FullPlaylist, error)
+	DryRunDiscoveryPlaylist(ctx context.Context) (spotify.FullPlaylist, error)
+	GetCurrentlyPlayingTrackAlbum(ctx context.Context) (spotify.FullAlbum, error)
+	GetCurrentTrack(ctx context.Context) (spotify.FullTrack, bool, error)
+	GetCurrentUser(ctx context.Context) (spotify.User, error)
+	GetCurrentUsersPlaylistMatchingPattern(ctx context.Context, pattern string) ([]spotify.FullPlaylist, error)
+	GetIndexSummary(ctx context.Context) (IndexSummary, error)
+	GetPlaylist(ctx context.Context, playlistID string) (spotify.FullPlaylist, error)
+	ListPlaylistsForCurrentUser(ctx context.Context) ([]spotify.SimplePlaylist, error)
+}
+
+type spotifyClientHandlerFunc func(svc Service) http.HandlerFunc
 
 func (h *httpHandler) withService(sHandler spotifyClientHandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -64,7 +78,7 @@ func (h *httpHandler) withService(sHandler spotifyClientHandlerFunc) http.Handle
 	}
 }
 
-func (h *httpHandler) whoami(svc *Service) http.HandlerFunc {
+func (h *httpHandler) whoami(svc Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		usr, err := svc.GetCurrentUser(ctx)
@@ -77,7 +91,7 @@ func (h *httpHandler) whoami(svc *Service) http.HandlerFunc {
 	}
 }
 
-func (h *httpHandler) listPlaylists(svc *Service) http.HandlerFunc {
+func (h *httpHandler) listPlaylists(svc Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		playlists, err := svc.ListPlaylistsForCurrentUser(ctx)
@@ -93,7 +107,7 @@ func (h *httpHandler) listPlaylists(svc *Service) http.HandlerFunc {
 	}
 }
 
-func (h *httpHandler) getPlaylistMatchingPattern(svc *Service) http.HandlerFunc {
+func (h *httpHandler) getPlaylistMatchingPattern(svc Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		pattern := r.URL.Query().Get("pattern")
@@ -114,7 +128,7 @@ func (h *httpHandler) getPlaylistMatchingPattern(svc *Service) http.HandlerFunc 
 	}
 }
 
-func (h *httpHandler) getPlaylist(svc *Service) http.HandlerFunc {
+func (h *httpHandler) getPlaylist(svc Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		playlistID := chi.URLParam(r, playlistIDKey)
@@ -132,7 +146,7 @@ func (h *httpHandler) getPlaylist(svc *Service) http.HandlerFunc {
 	}
 }
 
-func (h *httpHandler) checkCurrentTrackInLibrary(svc *Service) http.HandlerFunc {
+func (h *httpHandler) checkCurrentTrackInLibrary(svc Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		currentTrack, playlists, err := svc.CheckPlayingTrackInLibrary(ctx)
@@ -153,7 +167,7 @@ func (h *httpHandler) checkCurrentTrackInLibrary(svc *Service) http.HandlerFunc 
 	}
 }
 
-func (h *httpHandler) generateDiscoveryPlaylist(svc *Service) http.HandlerFunc {
+func (h *httpHandler) generateDiscoveryPlaylist(svc Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		var playlist spotify.FullPlaylist
@@ -175,7 +189,7 @@ func (h *httpHandler) generateDiscoveryPlaylist(svc *Service) http.HandlerFunc {
 	}
 }
 
-func (h *httpHandler) getAlbumForCurrentTrack(svc *Service) http.HandlerFunc {
+func (h *httpHandler) getAlbumForCurrentTrack(svc Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		album, err := svc.GetCurrentlyPlayingTrackAlbum(ctx)
@@ -192,7 +206,7 @@ func (h *httpHandler) getAlbumForCurrentTrack(svc *Service) http.HandlerFunc {
 	}
 }
 
-func (h *httpHandler) getCurrentTrack(svc *Service) http.HandlerFunc {
+func (h *httpHandler) getCurrentTrack(svc Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		track, isPlaying, err := svc.GetCurrentTrack(ctx)
@@ -217,7 +231,7 @@ func (h *httpHandler) getCurrentTrack(svc *Service) http.HandlerFunc {
 	}
 }
 
-func (h *httpHandler) getIndexSummary(svc *Service) http.HandlerFunc {
+func (h *httpHandler) getIndexSummary(svc Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		summary, err := svc.GetIndexSummary(ctx)

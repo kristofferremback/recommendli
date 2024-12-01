@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS keyvaluestore (
+  key TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  value JSONB NOT NULL
+);

@@ -51,13 +51,3 @@ func (m *MemoryStore) Put(ctx context.Context, key string, data interface{}) err
 	m.data[key] = data
 	return nil
 }
-
-func (m *MemoryStore) List(ctx context.Context) ([]string, error) {
-	m.mux.Lock()
-	defer m.mux.Unlock()
-	keys := make([]string, len(m.data))
-	for key := range m.data {
-		keys = append(keys, key)
-	}
-	return keys, nil
-}

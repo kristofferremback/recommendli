@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -54,23 +53,6 @@ func (d *DiskStore) Put(ctx context.Context, key string, data interface{}) error
 		return fmt.Errorf("serializing data: %w", err)
 	}
 	return nil
-}
-
-func (d *DiskStore) List(ctx context.Context) ([]string, error) {
-	var keys []string
-	walkFunc := func(path string, info fs.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.IsDir() {
-			keys = append(keys, strings.TrimPrefix(path, d.dir))
-		}
-		return nil
-	}
-	if err := filepath.Walk(d.dir, walkFunc); err != nil {
-		return nil, fmt.Errorf("walking directory: %w", err)
-	}
-	return keys, nil
 }
 
 func (d *DiskStore) filename(key string) string {

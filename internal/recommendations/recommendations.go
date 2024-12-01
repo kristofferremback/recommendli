@@ -68,11 +68,11 @@ func NewServiceFactory(store KeyValueStore, userPreferences UserPreferenceProvid
 	return &ServiceFactory{store: store, userPreferences: userPreferences}
 }
 
-func (f *ServiceFactory) New(spotifyProvider SpotifyProvider) *Service {
-	return &Service{store: f.store, userPreferences: f.userPreferences, spotify: spotifyProvider}
+func (f *ServiceFactory) New(spotifyProvider SpotifyProvider) *service {
+	return &service{store: f.store, userPreferences: f.userPreferences, spotify: spotifyProvider}
 }
 
-type Service struct {
+type service struct {
 	store           KeyValueStore
 	userPreferences UserPreferenceProvider
 	spotify         SpotifyProvider
@@ -98,7 +98,7 @@ func (s score) calculate(prefs UserPreferences) int {
 	return value + s.artistRelevace + s.album.ReleaseDateTime().Year() - 2000 + s.album.Tracks.Total
 }
 
-func (s *Service) ListPlaylistsForCurrentUser(ctx context.Context) ([]spotify.SimplePlaylist, error) {
+func (s *service) ListPlaylistsForCurrentUser(ctx context.Context) ([]spotify.SimplePlaylist, error) {
 	usr, err := s.GetCurrentUser(ctx)
 	if err != nil {
 		return nil, err
@@ -106,7 +106,7 @@ func (s *Service) ListPlaylistsForCurrentUser(ctx context.Context) ([]spotify.Si
 	return s.spotify.ListPlaylists(ctx, usr.ID)
 }
 
-func (s *Service) GetCurrentUsersPlaylistMatchingPattern(ctx context.Context, pattern string) ([]spotify.FullPlaylist, error) {
+func (s *service) GetCurrentUsersPlaylistMatchingPattern(ctx context.Context, pattern string) ([]spotify.FullPlaylist, error) {
 	re, err := regexp.Compile(pattern)
 	if err != nil {
 		return nil, fmt.Errorf("getting current user's playlists: %w", err)
@@ -127,11 +127,11 @@ func (s *Service) GetCurrentUsersPlaylistMatchingPattern(ctx context.Context, pa
 	return s.spotify.PopulatePlaylists(ctx, matching)
 }
 
-func (s *Service) GetPlaylist(ctx context.Context, playlistID string) (spotify.FullPlaylist, error) {
+func (s *service) GetPlaylist(ctx context.Context, playlistID string) (spotify.FullPlaylist, error) {
 	return s.spotify.GetPlaylist(ctx, playlistID)
 }
 
-func (s *Service) GetCurrentUser(ctx context.Context) (spotify.User, error) {
+func (s *service) GetCurrentUser(ctx context.Context) (spotify.User, error) {
 	return s.spotify.CurrentUser(ctx)
 }
 
@@ -143,7 +143,7 @@ func (err ErrNoCurrentTrack) Error() string {
 	return fmt.Sprintf("user %s must listen to music", err.usr.DisplayName)
 }
 
-func (s *Service) GetCurrentlyPlayingTrackAlbum(ctx context.Context) (spotify.FullAlbum, error) {
+func (s *service) GetCurrentlyPlayingTrackAlbum(ctx context.Context) (spotify.FullAlbum, error) {
 	usr, err := s.GetCurrentUser(ctx)
 	if err != nil {
 		return spotify.FullAlbum{}, err
@@ -159,11 +159,11 @@ func (s *Service) GetCurrentlyPlayingTrackAlbum(ctx context.Context) (spotify.Fu
 	return s.albumForTrack(ctx, currentTrack)
 }
 
-func (s *Service) GetCurrentTrack(ctx context.Context) (spotify.FullTrack, bool, error) {
+func (s *service) GetCurrentTrack(ctx context.Context) (spotify.FullTrack, bool, error) {
 	return s.spotify.CurrentTrack(ctx)
 }
 
-func (s *Service) CheckPlayingTrackInLibrary(ctx context.Context) (spotify.FullTrack, []spotify.SimplePlaylist, error) {
+func (s *service) CheckPlayingTrackInLibrary(ctx context.Context) (spotify.FullTrack, []spotify.SimplePlaylist, error) {
 	usr, err := s.GetCurrentUser(ctx)
 	if err != nil {
 		return spotify.FullTrack{}, nil, err
@@ -196,15 +196,15 @@ func (s *Service) CheckPlayingTrackInLibrary(ctx context.Context) (spotify.FullT
 	return currentTrack, nil, nil
 }
 
-func (s *Service) CreateDiscoveryPlaylist(ctx context.Context) (spotify.FullPlaylist, error) {
+func (s *service) CreateDiscoveryPlaylist(ctx context.Context) (spotify.FullPlaylist, error) {
 	return s.generateDiscoveryPlaylist(ctx, false)
 }
 
-func (s *Service) DryRunDiscoveryPlaylist(ctx context.Context) (spotify.FullPlaylist, error) {
+func (s *service) DryRunDiscoveryPlaylist(ctx context.Context) (spotify.FullPlaylist, error) {
 	return s.generateDiscoveryPlaylist(ctx, true)
 }
 
-func (s *Service) GetIndexSummary(ctx context.Context) (IndexSummary, error) {
+func (s *service) GetIndexSummary(ctx context.Context) (IndexSummary, error) {
 	usr, err := s.GetCurrentUser(ctx)
 	if err != nil {
 		return IndexSummary{}, fmt.Errorf("getting user: %w", err)
@@ -229,7 +229,7 @@ func (s *Service) GetIndexSummary(ctx context.Context) (IndexSummary, error) {
 	return summary, nil
 }
 
-func (s *Service) trackIndexFor(ctx context.Context, usr spotify.User) (*TrackPlaylistIndex, error) {
+func (s *service) trackIndexFor(ctx context.Context, usr spotify.User) (*TrackPlaylistIndex, error) {
 	playlists, err := s.spotify.ListPlaylists(ctx, usr.ID)
 	if err != nil {
 		return nil, fmt.Errorf("listing user playlists: %w", err)
@@ -249,7 +249,7 @@ func (s *Service) trackIndexFor(ctx context.Context, usr spotify.User) (*TrackPl
 	return indexedLibrary, nil
 }
 
-func (s *Service) generateDiscoveryPlaylist(ctx context.Context, dryRun bool) (spotify.FullPlaylist, error) {
+func (s *service) generateDiscoveryPlaylist(ctx context.Context, dryRun bool) (spotify.FullPlaylist, error) {
 	usr, err := s.GetCurrentUser(ctx)
 	if err != nil {
 		return spotify.FullPlaylist{}, err

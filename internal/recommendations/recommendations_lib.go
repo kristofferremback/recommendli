@@ -11,7 +11,7 @@ import (
 	"github.com/zmb3/spotify"
 )
 
-func (s *Service) getStoredTrackPlaylistIndex(ctx context.Context, usr spotify.User, simplePlaylists []spotify.SimplePlaylist) (*TrackPlaylistIndex, error) {
+func (s *service) getStoredTrackPlaylistIndex(ctx context.Context, usr spotify.User, simplePlaylists []spotify.SimplePlaylist) (*TrackPlaylistIndex, error) {
 	storeKey := fmt.Sprintf("cache_track-playlist-index_%s", usr.ID)
 
 	slog.DebugContext(ctx, "checking stored track playlist index", "user", usr.DisplayName, "key", storeKey)
@@ -39,7 +39,7 @@ func (s *Service) getStoredTrackPlaylistIndex(ctx context.Context, usr spotify.U
 	return index, nil
 }
 
-func (s *Service) albumForTrack(ctx context.Context, track spotify.FullTrack) (spotify.FullAlbum, error) {
+func (s *service) albumForTrack(ctx context.Context, track spotify.FullTrack) (spotify.FullAlbum, error) {
 	slog.DebugContext(ctx, "getting album for track", "track", stringifyTrack(track.SimpleTrack), "album", track.Album.Name, "album_id", track.Album.ID.String())
 	album, err := s.spotify.GetAlbum(ctx, track.Album.ID.String())
 	if err != nil {
@@ -107,7 +107,7 @@ func (s *Service) albumForTrack(ctx context.Context, track spotify.FullTrack) (s
 	return album, nil
 }
 
-func (s *Service) trackAndAlbum(ctx context.Context, track spotify.FullTrack) (spotify.FullTrack, spotify.FullAlbum, error) {
+func (s *service) trackAndAlbum(ctx context.Context, track spotify.FullTrack) (spotify.FullTrack, spotify.FullAlbum, error) {
 	album, err := s.albumForTrack(ctx, track)
 	if err != nil {
 		return spotify.FullTrack{}, spotify.FullAlbum{}, err
@@ -127,7 +127,7 @@ func (s *Service) trackAndAlbum(ctx context.Context, track spotify.FullTrack) (s
 	return track, album, nil
 }
 
-func (s *Service) scoreTracks(ctx context.Context, tracks []spotify.FullTrack, artistTrackCounts map[string]int) ([]score, error) {
+func (s *service) scoreTracks(ctx context.Context, tracks []spotify.FullTrack, artistTrackCounts map[string]int) ([]score, error) {
 	type indexAndTrack struct {
 		index  int
 		scores []score
@@ -199,7 +199,7 @@ loop:
 	return mostRelevant, nil
 }
 
-func (s *Service) upsertPlaylistByName(ctx context.Context, existingPlaylists []spotify.SimplePlaylist, userID, playlistName string, trackIDs []string) (spotify.FullPlaylist, error) {
+func (s *service) upsertPlaylistByName(ctx context.Context, existingPlaylists []spotify.SimplePlaylist, userID, playlistName string, trackIDs []string) (spotify.FullPlaylist, error) {
 	for _, p := range existingPlaylists {
 		if p.Name == playlistName {
 			if err := s.spotify.TruncatePlaylist(ctx, p.ID.String(), p.SnapshotID); err != nil {
