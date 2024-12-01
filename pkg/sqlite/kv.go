@@ -58,7 +58,7 @@ func (kv *KV) Put(ctx context.Context, key string, data interface{}) error {
 	}
 
 	if _, err := db.ExecContext(ctx, `
-		INSERT OR REPLACE INTO keyvaluestore (key, kind, value)
+		INSERT OR REPLACE INTO keyvaluestore (key, kind, value, updated_at)
 		VALUES (?, ?, ?, datetime('now'))
 	`, key, kv.kind, value); err != nil {
 		return fmt.Errorf("inserting into keyvaluestore: %w", err)
