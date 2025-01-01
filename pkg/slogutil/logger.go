@@ -18,8 +18,10 @@ func InitDefaultLogger(logLevel string) {
 		defer func() { slog.Warn("Could not find log level, defaulting to info", slog.String("level", logLevel)) }()
 	}
 
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+	textHandler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 		AddSource: true,
 		Level:     level,
-	})))
+	})
+
+	slog.SetDefault(slog.New(&CtxHandler{textHandler}))
 }
