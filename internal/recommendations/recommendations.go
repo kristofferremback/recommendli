@@ -9,16 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kristofferostlund/recommendli/pkg/keyvaluestore"
 	"github.com/zmb3/spotify"
-
-	"github.com/kristofferostlund/recommendli/pkg/maputil"
-	"github.com/kristofferostlund/recommendli/pkg/sortby"
 )
-
-type KeyValueStore interface {
-	Get(ctx context.Context, key string, out interface{}) (bool, error)
-	Put(ctx context.Context, key string, data interface{}) error
-}
 
 type SpotifyProvider interface {
 	ListPlaylists(ctx context.Context, userID string) ([]spotify.SimplePlaylist, error)
@@ -60,22 +53,33 @@ func (u UserPreferences) RecommendationPlaylistName(kind string, now time.Time) 
 }
 
 type ServiceFactory struct {
-	store           KeyValueStore
+	store           keyvaluestore.KV
 	userPreferences UserPreferenceProvider
+	trackIndex      TrackIndex
 }
 
-func NewServiceFactory(store KeyValueStore, userPreferences UserPreferenceProvider) *ServiceFactory {
-	return &ServiceFactory{store: store, userPreferences: userPreferences}
+func NewServiceFactory(store keyvaluestore.KV, userPreferences UserPreferenceProvider, trackIndex TrackIndex) *ServiceFactory {
+	return &ServiceFactory{
+		store:           store,
+		userPreferences: userPreferences,
+		trackIndex:      trackIndex,
+	}
 }
 
 func (f *ServiceFactory) New(spotifyProvider SpotifyProvider) *service {
-	return &service{store: f.store, userPreferences: f.userPreferences, spotify: spotifyProvider}
+	return &service{
+		store:           f.store,
+		userPreferences: f.userPreferences,
+		spotify:         spotifyProvider,
+		trackIndex:      f.trackIndex,
+	}
 }
 
 type service struct {
-	store           KeyValueStore
+	store           keyvaluestore.KV
 	userPreferences UserPreferenceProvider
 	spotify         SpotifyProvider
+	trackIndex      TrackIndex
 }
 
 type score struct {
@@ -176,14 +180,15 @@ func (s *service) CheckPlayingTrackInLibrary(ctx context.Context) (spotify.FullT
 		return spotify.FullTrack{}, nil, ErrNoCurrentTrack{usr: usr}
 	}
 
-	indexedLibrary, err := s.trackIndexFor(ctx, usr)
-	if err != nil {
+	if err := s.prepareTrackIndexForUser(ctx, usr); err != nil {
 		return spotify.FullTrack{}, nil, fmt.Errorf("getting track index: %w", err)
 	}
 
-	slog.InfoContext(ctx, "tracks fully listed", "unique song count", len(indexedLibrary.Tracks), "playlist count", len(indexedLibrary.Playlists))
-
-	if pls, found := indexedLibrary.Lookup(currentTrack); found {
+	pls, err := s.trackIndex.Lookup(ctx, usr.ID, currentTrack.SimpleTrack)
+	if err != nil {
+		return spotify.FullTrack{}, nil, fmt.Errorf("looking up track in library: %w", err)
+	}
+	if len(pls) > 0 {
 		playlistNames := make([]string, 0, len(pls))
 		for _, p := range pls {
 			playlistNames = append(playlistNames, p.Name)
@@ -210,43 +215,36 @@ func (s *service) GetIndexSummary(ctx context.Context) (IndexSummary, error) {
 		return IndexSummary{}, fmt.Errorf("getting user: %w", err)
 	}
 
-	indexedLibrary, err := s.trackIndexFor(ctx, usr)
-	if err != nil {
+	if err := s.prepareTrackIndexForUser(ctx, usr); err != nil {
 		return IndexSummary{}, fmt.Errorf("getting track index for user: %w", err)
 	}
 
-	playlists := maputil.Values(indexedLibrary.Playlists)
-	sort.Slice(playlists, func(i, j int) bool {
-		return sortby.PaddedNumbers(playlists[i].Name, playlists[j].Name, 10, true)
-	})
-
-	summary := IndexSummary{
-		UniqueTrackCount: len(indexedLibrary.Tracks),
-		PlaylistCount:    len(indexedLibrary.Playlists),
-		Playlists:        playlists,
+	summary, err := s.trackIndex.Summarize(ctx, usr.ID)
+	if err != nil {
+		return IndexSummary{}, fmt.Errorf("getting index summary: %w", err)
 	}
 
 	return summary, nil
 }
 
-func (s *service) trackIndexFor(ctx context.Context, usr spotify.User) (*TrackPlaylistIndex, error) {
+func (s *service) prepareTrackIndexForUser(ctx context.Context, usr spotify.User) error {
 	playlists, err := s.spotify.ListPlaylists(ctx, usr.ID)
 	if err != nil {
-		return nil, fmt.Errorf("listing user playlists: %w", err)
+		return fmt.Errorf("listing user playlists: %w", err)
 	}
 	prefs, err := s.userPreferences.GetPreferences(ctx, usr.ID)
 	if err != nil {
-		return nil, fmt.Errorf("getting user prefences: %w", err)
+		return fmt.Errorf("getting user prefences: %w", err)
 	}
 	libraryPlaylists := filterSimplePlaylist(playlists, func(p spotify.SimplePlaylist) bool {
 		return prefs.IsLibraryPlaylistName(p.Name)
 	})
 
-	indexedLibrary, err := s.getStoredTrackPlaylistIndex(ctx, usr, libraryPlaylists)
-	if err != nil {
-		return nil, fmt.Errorf("populating library playlists when checking if track is in library: %w", err)
+	if err := s.ensureTrackIndexSynced(ctx, usr.ID, libraryPlaylists); err != nil {
+		return fmt.Errorf("checking if track index needs sync: %w", err)
 	}
-	return indexedLibrary, nil
+
+	return nil
 }
 
 func (s *service) generateDiscoveryPlaylist(ctx context.Context, dryRun bool) (spotify.FullPlaylist, error) {
@@ -271,9 +269,8 @@ func (s *service) generateDiscoveryPlaylist(ctx context.Context, dryRun bool) (s
 		return prefs.IsLibraryPlaylistName(p.Name)
 	})
 
-	indexedLibrary, err := s.getStoredTrackPlaylistIndex(ctx, usr, libraryPlaylists)
-	if err != nil {
-		return spotify.FullPlaylist{}, fmt.Errorf("populating library playlists when generating discovery playlist: %w", err)
+	if err := s.ensureTrackIndexSynced(ctx, usr.ID, libraryPlaylists); err != nil {
+		return spotify.FullPlaylist{}, fmt.Errorf("checking if track index needs sync: %w", err)
 	}
 
 	populatedDiscovery, err := s.spotify.PopulatePlaylists(ctx, discoveryPlaylists)
@@ -284,14 +281,18 @@ func (s *service) generateDiscoveryPlaylist(ctx context.Context, dryRun bool) (s
 	slog.DebugContext(ctx, "discovery playlists fully listed", "unique song count", len(uniqueTracks(tracksFor(populatedDiscovery))), "playlist count", len(populatedDiscovery))
 	candidates := make([]spotify.FullTrack, 0)
 	for _, t := range uniqueTracks(tracksFor(populatedDiscovery)) {
-		has := indexedLibrary.Has(t)
+		has, err := s.trackIndex.Has(ctx, usr.ID, t.SimpleTrack)
+		if err != nil {
+			return spotify.FullPlaylist{}, fmt.Errorf("checking if track is in library when generating discovery playlist: %w", err)
+		}
+
 		slog.DebugContext(ctx, "candidate track", "track", stringifyTrack(t.SimpleTrack), "in_library", has)
 		if !has {
 			candidates = append(candidates, t)
 		}
 	}
 
-	scores, err := s.scoreTracks(ctx, candidates, countArtistTracks(simpleTrackMapToSlice(indexedLibrary.Tracks)))
+	scores, err := s.scoreTracks(ctx, usr.ID, candidates)
 	if err != nil {
 		return spotify.FullPlaylist{}, fmt.Errorf("getting most relevant versions of tracks when generating discovery playlist: %w", err)
 	}

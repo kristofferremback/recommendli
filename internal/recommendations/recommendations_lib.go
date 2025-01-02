@@ -8,35 +8,50 @@ import (
 	"strings"
 
 	"github.com/kristofferostlund/recommendli/pkg/paginator"
+	"github.com/kristofferostlund/recommendli/pkg/slogutil"
 	"github.com/zmb3/spotify"
 )
 
-func (s *service) getStoredTrackPlaylistIndex(ctx context.Context, usr spotify.User, simplePlaylists []spotify.SimplePlaylist) (*TrackPlaylistIndex, error) {
-	storeKey := fmt.Sprintf("cache_track-playlist-index_%s", usr.ID)
+func (s *service) ensureTrackIndexSynced(ctx context.Context, userID string, playlists []spotify.SimplePlaylist) error {
+	ctx = slogutil.WithAttrs(ctx, slog.String("user", userID))
 
-	slog.DebugContext(ctx, "checking stored track playlist index", "user", usr.DisplayName, "key", storeKey)
-	var index *TrackPlaylistIndex
-	found, err := s.store.Get(ctx, storeKey, &index)
+	slog.DebugContext(ctx, "ensuring track index is synced")
+
+	// Note: There seems to be a change in the Spotify API where recently modified playlists snaphot IDs aren't modified
+	// until later...
+	added, changed, removed, err := s.trackIndex.Diff(ctx, userID, playlists)
 	if err != nil {
-		return nil, err
-	}
-	if found && index.MatchesSimplePlaylists(simplePlaylists) {
-		slog.DebugContext(ctx, "using stored track playlist index", "user", usr.DisplayName, "key", storeKey)
-		return index, nil
+		return fmt.Errorf("checking if track index needs sync: %w", err)
 	}
 
-	slog.DebugContext(ctx, "updating stored track playlist index", "user", usr.DisplayName, "key", storeKey)
-	populatedLibrary, err := s.spotify.PopulatePlaylists(ctx, simplePlaylists)
+	if len(added)+len(changed)+len(removed) == 0 {
+		slog.DebugContext(ctx, "track index already up to date")
+		return nil
+	}
+
+	slog.DebugContext(ctx, "populating tracks for track index", "added", len(added), "changed", len(changed), "removed", len(removed))
+
+	addedPlaylists, err := s.spotify.PopulatePlaylists(ctx, added)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("populating added playlists: %w", err)
 	}
-	index = NewTrackPlaylistIndexFromFullPlaylists(populatedLibrary)
-	if err := s.store.Put(ctx, storeKey, &index); err != nil {
-		return nil, err
+	changedPlaylists, err := s.spotify.PopulatePlaylists(ctx, changed)
+	if err != nil {
+		return fmt.Errorf("populating changed playlists: %w", err)
 	}
-	slog.DebugContext(ctx, "stored track playlist index updated", "user", usr.DisplayName, "key", storeKey)
+	removedPlaylists, err := s.spotify.PopulatePlaylists(ctx, removed)
+	if err != nil {
+		return fmt.Errorf("populating removed playlists: %w", err)
+	}
 
-	return index, nil
+	slog.DebugContext(ctx, "syncing track index")
+
+	if err := s.trackIndex.Sync(ctx, userID, addedPlaylists, changedPlaylists, removedPlaylists); err != nil {
+		return fmt.Errorf("syncing track index: %w", err)
+	}
+
+	slog.DebugContext(ctx, "track index successfully synced")
+	return nil
 }
 
 func (s *service) albumForTrack(ctx context.Context, track spotify.FullTrack) (spotify.FullAlbum, error) {
@@ -127,7 +142,7 @@ func (s *service) trackAndAlbum(ctx context.Context, track spotify.FullTrack) (s
 	return track, album, nil
 }
 
-func (s *service) scoreTracks(ctx context.Context, tracks []spotify.FullTrack, artistTrackCounts map[string]int) ([]score, error) {
+func (s *service) scoreTracks(ctx context.Context, userID string, tracks []spotify.FullTrack) ([]score, error) {
 	type indexAndTrack struct {
 		index  int
 		scores []score
@@ -161,7 +176,11 @@ func (s *service) scoreTracks(ctx context.Context, tracks []spotify.FullTrack, a
 				}
 				artistRelevace := 0
 				for _, a := range track.Artists {
-					artistRelevace += artistTrackCounts[a.Name]
+					ar, err := s.trackIndex.CountTracksByArtist(ctx, userID, a.Name)
+					if err != nil {
+						return nil, fmt.Errorf("counting tracks by artist %s: %w", a.Name, err)
+					}
+					artistRelevace += ar
 				}
 				scores = append(scores, score{track: track, album: album, artistRelevace: artistRelevace})
 			}
@@ -209,24 +228,6 @@ func (s *service) upsertPlaylistByName(ctx context.Context, existingPlaylists []
 		}
 	}
 	return s.spotify.CreatePlaylist(ctx, userID, playlistName, trackIDs)
-}
-
-func simpleTrackMapToSlice(trackMap map[string]spotify.SimpleTrack) []spotify.SimpleTrack {
-	tracks := make([]spotify.SimpleTrack, 0)
-	for _, t := range trackMap {
-		tracks = append(tracks, t)
-	}
-	return tracks
-}
-
-func countArtistTracks(tracks []spotify.SimpleTrack) map[string]int {
-	artistTrackCounts := make(map[string]int)
-	for _, t := range tracks {
-		for _, a := range t.Artists {
-			artistTrackCounts[a.Name] += 1
-		}
-	}
-	return artistTrackCounts
 }
 
 func dummyPlaylistFor(name string, tracks []spotify.FullTrack) spotify.FullPlaylist {
@@ -328,14 +329,4 @@ func uniqueTracks(tracks []spotify.FullTrack) []spotify.FullTrack {
 		}
 	}
 	return unique
-}
-
-func filterTracks(tracks []spotify.FullTrack, predicate func(t spotify.FullTrack) bool) []spotify.FullTrack {
-	filtered := make([]spotify.FullTrack, 0)
-	for _, t := range tracks {
-		if predicate(t) {
-			filtered = append(filtered, t)
-		}
-	}
-	return filtered
 }

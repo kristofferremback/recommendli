@@ -82,7 +82,7 @@ func main() {
 	r.Get(authAdaptor.Path(), authAdaptor.TokenCallbackHandler())
 	r.Get(authAdaptor.UIRedirectPath(), authAdaptor.UIRedirectHandler())
 
-	recommendatinsHandler, err := getRecommendationsHandler(authAdaptor, sqlitePeristenceFactory(db))
+	recommendatinsHandler, err := getRecommendationsHandler(authAdaptor, sqlitePeristenceFactory(db), sqlite.NewTrackIndex(db, recommendations.TrackKey))
 	if err != nil {
 		slogutil.Fatal("Setting up recommendations handler", slogutil.Error(err))
 	}
@@ -111,12 +111,12 @@ func main() {
 	slog.Info("Server shutdown")
 }
 
-func getRecommendationsHandler(authAdaptor *recommendations.AuthAdaptor, persistedKV kvPersistenceFactory) (*chi.Mux, error) {
+func getRecommendationsHandler(authAdaptor *recommendations.AuthAdaptor, persistedKV kvPersistenceFactory, trackIndex recommendations.TrackIndex) (*chi.Mux, error) {
 	serviceCache := persistedKV("cache")
 	spotifyCache := persistedKV("spotify-provider")
 
 	recommendatinsHandler := recommendations.NewRouter(
-		recommendations.NewServiceFactory(serviceCache, recommendations.NewDummyUserPreferenceProvider()),
+		recommendations.NewServiceFactory(serviceCache, recommendations.NewDummyUserPreferenceProvider(), trackIndex),
 		recommendations.NewSpotifyProviderFactory(spotifyCache),
 		authAdaptor,
 	)

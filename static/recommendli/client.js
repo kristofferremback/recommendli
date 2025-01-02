@@ -27,6 +27,7 @@ import { throwOn404, redirectingFetch } from './redirecting-fetch.js'
  * @typedef Playlist
  * @property {string} id
  * @property {string} name
+ * @property {string} snapshot_id
  * @property {ExternalUrls} external_urls
  * @property {Track[]} tracks
  *
@@ -88,6 +89,16 @@ const recommendliClient = {
    */
   getIndexSummary: async () => {
     const response = await throwOn404(redirectingFetch('/recommendations/v1/index/summary'))
+    return await response.json()
+  },
+
+  /**
+   *
+   * @param {string} id
+   * @returns {Promise<Playlist>}
+   */
+  getPlaylistById: async (id) => {
+    const response = await throwOn404(redirectingFetch(`/recommendations/v1/playlists/${id}`))
     return await response.json()
   },
 }

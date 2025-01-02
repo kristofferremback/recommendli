@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/kristofferostlund/recommendli/pkg/keyvaluestore"
 )
 
@@ -24,7 +25,7 @@ func NewKV(db *DB, kind string) *KV {
 	}
 }
 
-func (kv *KV) Get(ctx context.Context, key string, out interface{}) (bool, error) {
+func (kv *KV) Get(ctx context.Context, key string, out any) (bool, error) {
 	db, unlock := kv.db.RGet(ctx)
 	defer unlock()
 
@@ -48,7 +49,64 @@ func (kv *KV) Get(ctx context.Context, key string, out interface{}) (bool, error
 	return true, nil
 }
 
-func (kv *KV) Put(ctx context.Context, key string, data interface{}) error {
+func (kv *KV) GetMany(ctx context.Context, keys []string, out any) error {
+	if len(keys) == 0 {
+		return nil
+	}
+
+	db, unlock := kv.db.RGet(ctx)
+	defer unlock()
+
+	query, args, err := sqlx.In(`
+		SELECT key, value
+		FROM keyvaluestore
+		WHERE kind = ?
+			AND key IN (?)
+	`, kv.kind, keys)
+	if err != nil {
+		return fmt.Errorf("building query: %w", err)
+	}
+
+	rows, err := db.QueryContext(ctx, sqlx.Rebind(sqlx.QUESTION, query), args...)
+	if err != nil {
+		return fmt.Errorf("getting many from keyvaluestore: %w", err)
+	}
+	defer rows.Close()
+
+	// Create a sparse map of the values from the database so we can get the values out in order.
+	values := make(map[string][]byte)
+	for i := 0; rows.Next(); i++ {
+		var key string
+		var value []byte
+		if err := rows.Scan(&key, &value); err != nil {
+			return fmt.Errorf("scanning keyvaluestore: %w", err)
+		}
+		values[key] = value
+	}
+
+	// Build up an array of all items in the same order as keys,
+	// filling in the blanks with null values.
+	allValues := []byte(`[`)
+	for i, key := range keys {
+		if value, ok := values[key]; ok {
+			allValues = append(allValues, value...)
+		} else {
+			allValues = append(allValues, []byte(`null`)...) // Shitty way of doing this, assuming null is a valid value...
+		}
+		if i < len(keys)-1 {
+			allValues = append(allValues, []byte(`,`)...)
+		}
+	}
+	allValues = append(allValues, []byte(`]`)...)
+
+	if err := kv.unmarshalValue(allValues, out); err != nil {
+		return fmt.Errorf("unmarshalling values: %w", err)
+	}
+
+	return nil
+}
+
+func (kv *KV) Put(ctx context.Context, key string, data any) error {
 	db, unlock := kv.db.Get(ctx)
 	defer unlock()
 
@@ -67,10 +125,10 @@ func (kv *KV) Put(ctx context.Context, key string, data interface{}) error {
 	return nil
 }
 
-func (kv *KV) marshalValue(data interface{}) ([]byte, error) {
+func (kv *KV) marshalValue(data any) ([]byte, error) {
 	return json.Marshal(data)
 }
 
-func (kv *KV) unmarshalValue(data []byte, out interface{}) error {
+func (kv *KV) unmarshalValue(data []byte, out any) error {
 	return json.Unmarshal(data, out)
 }

@@ -5,20 +5,21 @@ import (
 	"fmt"
 
 	"github.com/kristofferostlund/recommendli/pkg/ctxhelper"
+	"github.com/kristofferostlund/recommendli/pkg/keyvaluestore"
 	"github.com/kristofferostlund/recommendli/pkg/paginator"
 	"github.com/zmb3/spotify"
 )
 
 type SpotifyAdaptor struct {
 	spotify spotify.Client
-	kv      KeyValueStore
+	kv      keyvaluestore.KV
 }
 
 type SpotifyAdaptorFactory struct {
-	store KeyValueStore
+	store keyvaluestore.KV
 }
 
-func NewSpotifyProviderFactory(store KeyValueStore) *SpotifyAdaptorFactory {
+func NewSpotifyProviderFactory(store keyvaluestore.KV) *SpotifyAdaptorFactory {
 	return &SpotifyAdaptorFactory{store: store}
 }
 

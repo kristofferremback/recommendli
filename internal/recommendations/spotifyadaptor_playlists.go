@@ -100,14 +100,45 @@ func (s *SpotifyAdaptor) PopulatePlaylists(ctx context.Context, simplePlaylists 
 	if err := ctxhelper.Closed(ctx); err != nil {
 		return nil, fmt.Errorf("populating playlists: %w", err)
 	}
-	playlists := make([]spotify.FullPlaylist, 0, len(simplePlaylists))
+
+	keys := make([]string, 0, len(simplePlaylists))
 	for _, p := range simplePlaylists {
-		playlist, err := s.getStoredPlaylist(ctx, p.ID.String(), p.SnapshotID)
-		if err != nil {
-			return nil, err
-		}
-		playlists = append(playlists, playlist)
+		keys = append(keys, fmt.Sprintf("playlist_%s", p.ID))
 	}
+	kvPlaylists := make([]spotify.FullPlaylist, len(simplePlaylists))
+
+	if err := s.kv.GetMany(ctx, keys, &kvPlaylists); err != nil {
+		return nil, fmt.Errorf("getting many playlists: %w", err)
+	}
+
+	playlists := make([]spotify.FullPlaylist, 0, len(simplePlaylists))
+	for i, pl := range kvPlaylists {
+		// If it's populated and not outdated, use it
+		if pl.SnapshotID != "" && pl.SnapshotID == simplePlaylists[i].SnapshotID {
+			playlists = append(playlists, pl)
+		} else {
+			reason := "not found"
+			if pl.SnapshotID != "" {
+				reason = "out of date"
+			}
+			slog.DebugContext(ctx, "getting populated playlist from Spotify", "playlist", simplePlaylists[i].Name, "reason", reason, "playlist_id", simplePlaylists[i].ID, "snapshot_id", simplePlaylists[i].SnapshotID)
+
+			// Else fetch it from Spotify and store it
+			playlist, err := s.getPlaylist(ctx, simplePlaylists[i].ID.String())
+			if err != nil {
+				return nil, fmt.Errorf("getting playlist %s: %w", simplePlaylists[i].ID, err)
+			}
+			playlists = append(playlists, playlist)
+			if err := s.kv.Put(ctx, keys[i], playlist); err != nil {
+				return nil, fmt.Errorf("storing playlist %s: %w", simplePlaylists[i].ID, err)
+			}
+
+			if err := s.kv.Put(ctx, keys[i], playlist); err != nil {
+				return nil, fmt.Errorf("storing playlist %s (%s): %w", playlist.Name, playlist.ID, err)
+			}
+		}
+	}
+
 	return playlists, nil
 }
 
@@ -196,7 +227,7 @@ func (s *SpotifyAdaptor) listPlaylists(ctx context.Context, userID string) ([]sp
 				return nil, err
 			}
 			ipChan <- indexAndPlaylists{i, page.Playlists}
-			slog.Debug("listing playlists for user", "user", userID, "counter", i, "offset", page.Offset, "total", page.Total)
+			slog.DebugContext(ctx, "listing playlists for user", "user", userID, "counter", i, "offset", page.Offset, "total", page.Total)
 			return next(page.Total), nil
 		})
 	})
