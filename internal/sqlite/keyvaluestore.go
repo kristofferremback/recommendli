@@ -8,25 +8,25 @@ import (
 	"fmt"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/kristofferostlund/recommendli/pkg/keyvaluestore"
+	"github.com/kristofferostlund/recommendli/internal/recommendations"
 	"github.com/zmb3/spotify"
 )
 
-var _ keyvaluestore.KV = (*KV)(nil)
+var _ recommendations.KeyValueStore = (*KeyValueStore)(nil)
 
-type KV struct {
+type KeyValueStore struct {
 	db   *DB
 	kind string
 }
 
-func NewKV(db *DB, kind string) *KV {
-	return &KV{
+func NewKeyValueStore(db *DB, kind string) *KeyValueStore {
+	return &KeyValueStore{
 		db:   db,
 		kind: kind,
 	}
 }
 
-func (kv *KV) Get(ctx context.Context, key string, out any) (bool, error) {
+func (kv *KeyValueStore) Get(ctx context.Context, key string, out any) (bool, error) {
 	db, unlock := kv.db.RGet(ctx)
 	defer unlock()
 
@@ -50,7 +50,7 @@ func (kv *KV) Get(ctx context.Context, key string, out any) (bool, error) {
 	return true, nil
 }
 
-func (kv *KV) GetMany(ctx context.Context, keys []string, out any) error {
+func (kv *KeyValueStore) GetMany(ctx context.Context, keys []string, out any) error {
 	if len(keys) == 0 {
 		return nil
 	}
@@ -107,7 +107,7 @@ func (kv *KV) GetMany(ctx context.Context, keys []string, out any) error {
 	return nil
 }
 
-func (kv *KV) Put(ctx context.Context, key string, data any) error {
+func (kv *KeyValueStore) Put(ctx context.Context, key string, data any) error {
 	db, unlock := kv.db.Get(ctx)
 	defer unlock()
 
@@ -126,11 +126,11 @@ func (kv *KV) Put(ctx context.Context, key string, data any) error {
 	return nil
 }
 
-func (kv *KV) marshalValue(data any) ([]byte, error) {
+func (kv *KeyValueStore) marshalValue(data any) ([]byte, error) {
 	return json.Marshal(data)
 }
 
-func (kv *KV) unmarshalValue(data []byte, out any) error {
+func (kv *KeyValueStore) unmarshalValue(data []byte, out any) error {
 	if err := json.Unmarshal(data, out); err != nil {
 		return fmt.Errorf("unmarshalling value: %w", err)
 	}

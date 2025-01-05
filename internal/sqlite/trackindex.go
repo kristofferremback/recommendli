@@ -154,8 +154,6 @@ func (t *TrackIndex) Sync(ctx context.Context, userID string, added, changed, re
 	}
 	defer tx.Rollback()
 
-	// TODO: Figure out why changing a playlist doesn't update immediately now that the tracks property is correct
-
 	slog.DebugContext(ctx, "inserting added playlists")
 	for _, playlist := range added {
 		if err := t.addPlaylistToTrackIndex(ctx, tx, userID, playlist); err != nil {

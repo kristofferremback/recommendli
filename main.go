@@ -17,10 +17,9 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/kristofferostlund/recommendli/internal/recommendations"
-	"github.com/kristofferostlund/recommendli/pkg/keyvaluestore"
+	"github.com/kristofferostlund/recommendli/internal/sqlite"
 	"github.com/kristofferostlund/recommendli/pkg/migrations"
 	"github.com/kristofferostlund/recommendli/pkg/slogutil"
-	"github.com/kristofferostlund/recommendli/pkg/sqlite"
 	"github.com/kristofferostlund/recommendli/pkg/srv"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -123,11 +122,11 @@ func getRecommendationsHandler(authAdaptor *recommendations.AuthAdaptor, persist
 	return recommendatinsHandler, nil
 }
 
-type kvPersistenceFactory func(prefix string) keyvaluestore.KV
+type kvPersistenceFactory func(prefix string) recommendations.KeyValueStore
 
 func sqlitePeristenceFactory(db *sqlite.DB) kvPersistenceFactory {
-	return func(kind string) keyvaluestore.KV {
-		return sqlite.NewKV(db, kind)
+	return func(kind string) recommendations.KeyValueStore {
+		return sqlite.NewKeyValueStore(db, kind)
 	}
 }
 

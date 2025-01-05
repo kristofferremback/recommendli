@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kristofferostlund/recommendli/pkg/keyvaluestore"
 	"github.com/zmb3/spotify"
 )
 
@@ -53,12 +52,12 @@ func (u UserPreferences) RecommendationPlaylistName(kind string, now time.Time) 
 }
 
 type ServiceFactory struct {
-	store           keyvaluestore.KV
+	store           KeyValueStore
 	userPreferences UserPreferenceProvider
 	trackIndex      TrackIndex
 }
 
-func NewServiceFactory(store keyvaluestore.KV, userPreferences UserPreferenceProvider, trackIndex TrackIndex) *ServiceFactory {
+func NewServiceFactory(store KeyValueStore, userPreferences UserPreferenceProvider, trackIndex TrackIndex) *ServiceFactory {
 	return &ServiceFactory{
 		store:           store,
 		userPreferences: userPreferences,
@@ -76,7 +75,7 @@ func (f *ServiceFactory) New(spotifyProvider SpotifyProvider) *service {
 }
 
 type service struct {
-	store           keyvaluestore.KV
+	store           KeyValueStore
 	userPreferences UserPreferenceProvider
 	spotify         SpotifyProvider
 	trackIndex      TrackIndex
