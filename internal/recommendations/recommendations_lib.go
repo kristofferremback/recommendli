@@ -17,8 +17,6 @@ func (s *service) ensureTrackIndexSynced(ctx context.Context, userID string, pla
 
 	slog.DebugContext(ctx, "ensuring track index is synced")
 
-	// Note: There seems to be a change in the Spotify API where recently modified playlists snaphot IDs aren't modified
-	// until later...
 	added, changed, removed, err := s.trackIndex.Diff(ctx, userID, playlists)
 	if err != nil {
 		return fmt.Errorf("checking if track index needs sync: %w", err)

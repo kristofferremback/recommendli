@@ -10,6 +10,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/kristofferostlund/recommendli/internal/recommendations"
 	"github.com/kristofferostlund/recommendli/pkg/slogutil"
+	"github.com/kristofferostlund/recommendli/pkg/spotifyutil"
 	"github.com/zmb3/spotify"
 )
 
@@ -124,7 +125,7 @@ func (t *TrackIndex) Diff(ctx context.Context, userID string, playlists []spotif
 	for id, n := range next {
 		if o, exists := prev[id]; !exists {
 			addedPlaylists = append(addedPlaylists, n)
-		} else if n.SnapshotID != o.SnapshotID {
+		} else if spotifyutil.SimplePlaylistHasChanged(n, o) {
 			changedPlaylists = append(changedPlaylists, n)
 		}
 	}
@@ -147,11 +148,13 @@ func (t *TrackIndex) Sync(ctx context.Context, userID string, added, changed, re
 
 	slog.DebugContext(ctx, "beginning tx")
 
-	tx, err := db.BeginTxx(ctx, &sql.TxOptions{Isolation: sql.LevelDefault})
+	tx, err := db.BeginTxx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return fmt.Errorf("beginning tx: %w", err)
 	}
 	defer tx.Rollback()
+
+	// TODO: Figure out why changing a playlist doesn't update immediately now that the tracks property is correct
 
 	slog.DebugContext(ctx, "inserting added playlists")
 	for _, playlist := range added {

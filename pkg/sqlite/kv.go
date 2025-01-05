@@ -9,6 +9,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/kristofferostlund/recommendli/pkg/keyvaluestore"
+	"github.com/zmb3/spotify"
 )
 
 var _ keyvaluestore.KV = (*KV)(nil)
@@ -130,5 +131,29 @@ func (kv *KV) marshalValue(data any) ([]byte, error) {
 }
 
 func (kv *KV) unmarshalValue(data []byte, out any) error {
-	return json.Unmarshal(data, out)
+	if err := json.Unmarshal(data, out); err != nil {
+		return fmt.Errorf("unmarshalling value: %w", err)
+	}
+
+	switch res := out.(type) {
+	case *spotify.FullPlaylist:
+		// The spotify.FullPlaylist wraps a spotify.SimplePlaylist except
+		// the tracks, which results in the simple playlist missing track
+		// information.
+		res.SimplePlaylist.Tracks = spotify.PlaylistTracks{
+			Endpoint: res.Tracks.Endpoint,
+			Total:    uint(res.Tracks.Total),
+		}
+	case *[]spotify.FullPlaylist:
+		for i := range *res {
+			pl := (*res)[i]
+			pl.SimplePlaylist.Tracks = spotify.PlaylistTracks{
+				Endpoint: pl.Tracks.Endpoint,
+				Total:    uint(pl.Tracks.Total),
+			}
+			(*res)[i] = pl
+		}
+	}
+
+	return nil
 }

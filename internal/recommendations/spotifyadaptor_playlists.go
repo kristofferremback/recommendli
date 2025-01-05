@@ -8,6 +8,7 @@ import (
 
 	"github.com/kristofferostlund/recommendli/pkg/ctxhelper"
 	"github.com/kristofferostlund/recommendli/pkg/paginator"
+	"github.com/kristofferostlund/recommendli/pkg/spotifyutil"
 	"github.com/zmb3/spotify"
 	"golang.org/x/sync/errgroup"
 )
@@ -105,20 +106,20 @@ func (s *SpotifyAdaptor) PopulatePlaylists(ctx context.Context, simplePlaylists 
 	for _, p := range simplePlaylists {
 		keys = append(keys, fmt.Sprintf("playlist_%s", p.ID))
 	}
-	kvPlaylists := make([]spotify.FullPlaylist, len(simplePlaylists))
+	cachedPlaylists := make([]spotify.FullPlaylist, len(simplePlaylists))
 
-	if err := s.kv.GetMany(ctx, keys, &kvPlaylists); err != nil {
+	if err := s.kv.GetMany(ctx, keys, &cachedPlaylists); err != nil {
 		return nil, fmt.Errorf("getting many playlists: %w", err)
 	}
 
 	playlists := make([]spotify.FullPlaylist, 0, len(simplePlaylists))
-	for i, pl := range kvPlaylists {
+	for i, cached := range cachedPlaylists {
 		// If it's populated and not outdated, use it
-		if pl.SnapshotID != "" && pl.SnapshotID == simplePlaylists[i].SnapshotID {
-			playlists = append(playlists, pl)
+		if cached.SnapshotID != "" && !spotifyutil.SimplePlaylistHasChanged(cached.SimplePlaylist, simplePlaylists[i]) {
+			playlists = append(playlists, cached)
 		} else {
 			reason := "not found"
-			if pl.SnapshotID != "" {
+			if cached.SnapshotID != "" {
 				reason = "out of date"
 			}
 			slog.DebugContext(ctx, "getting populated playlist from Spotify", "playlist", simplePlaylists[i].Name, "reason", reason, "playlist_id", simplePlaylists[i].ID, "snapshot_id", simplePlaylists[i].SnapshotID)
