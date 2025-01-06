@@ -19,6 +19,7 @@ import (
 	"github.com/kristofferostlund/recommendli/internal/recommendations"
 	"github.com/kristofferostlund/recommendli/internal/sqlite"
 	"github.com/kristofferostlund/recommendli/pkg/migrations"
+	"github.com/kristofferostlund/recommendli/pkg/singleflight"
 	"github.com/kristofferostlund/recommendli/pkg/slogutil"
 	"github.com/kristofferostlund/recommendli/pkg/srv"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -81,7 +82,7 @@ func main() {
 	r.Get(authAdaptor.Path(), authAdaptor.TokenCallbackHandler())
 	r.Get(authAdaptor.UIRedirectPath(), authAdaptor.UIRedirectHandler())
 
-	recommendatinsHandler, err := getRecommendationsHandler(authAdaptor, sqlitePeristenceFactory(db), sqlite.NewTrackIndex(db, recommendations.TrackKey))
+	recommendatinsHandler, err := getRecommendationsHandler(authAdaptor, sqlitePeristenceFactory(db), sqlite.NewTrackIndex(db, recommendations.TrackKey), sqlite.NewLocker(db))
 	if err != nil {
 		slogutil.Fatal("Setting up recommendations handler", slogutil.Error(err))
 	}
@@ -110,12 +111,12 @@ func main() {
 	slog.Info("Server shutdown")
 }
 
-func getRecommendationsHandler(authAdaptor *recommendations.AuthAdaptor, persistedKV kvPersistenceFactory, trackIndex recommendations.TrackIndex) (*chi.Mux, error) {
+func getRecommendationsHandler(authAdaptor *recommendations.AuthAdaptor, persistedKV kvPersistenceFactory, trackIndex recommendations.TrackIndex, sfLocker singleflight.Locker) (*chi.Mux, error) {
 	serviceCache := persistedKV("cache")
 	spotifyCache := persistedKV("spotify-provider")
 
 	recommendatinsHandler := recommendations.NewRouter(
-		recommendations.NewServiceFactory(serviceCache, recommendations.NewDummyUserPreferenceProvider(), trackIndex),
+		recommendations.NewServiceFactory(serviceCache, recommendations.NewDummyUserPreferenceProvider(), trackIndex, sfLocker),
 		recommendations.NewSpotifyProviderFactory(spotifyCache),
 		authAdaptor,
 	)

@@ -24,6 +24,8 @@ type TrackIndex struct {
 type Querier interface {
 	sqlx.Queryer
 	sqlx.QueryerContext
+	sqlx.Execer
+	sqlx.ExecerContext
 	NamedExec(query string, arg interface{}) (sql.Result, error)
 	NamedExecContext(ctx context.Context, query string, arg interface{}) (sql.Result, error)
 	NamedQuery(query string, arg interface{}) (*sqlx.Rows, error)

@@ -12,44 +12,69 @@ import (
 	"github.com/zmb3/spotify"
 )
 
-func (s *service) ensureTrackIndexSynced(ctx context.Context, userID string, playlists []spotify.SimplePlaylist) error {
+func (s *service) getPlaylistsAndSyncIndex(ctx context.Context, userID string) ([]spotify.SimplePlaylist, error) {
+	// TODO: Make it possible to check if the index has been synced very recently
 	ctx = slogutil.WithAttrs(ctx, slog.String("user", userID))
 
-	slog.DebugContext(ctx, "ensuring track index is synced")
+	key := fmt.Sprintf("getPlaylistsAndSyncIndex:%s", userID)
 
-	added, changed, removed, err := s.trackIndex.Diff(ctx, userID, playlists)
+	playlists, err := s.sfSyncIndex(ctx, key, func(ctx context.Context) ([]spotify.SimplePlaylist, error) {
+		playlists, err := s.spotify.ListPlaylists(ctx, userID)
+		if err != nil {
+			return nil, fmt.Errorf("listing user playlists generating discovery playlist: %w", err)
+		}
+
+		prefs, err := s.userPreferences.GetPreferences(ctx, userID)
+		if err != nil {
+			return nil, fmt.Errorf("getting user preferences: %w", err)
+		}
+
+		library := filterSimplePlaylist(playlists, func(p spotify.SimplePlaylist) bool {
+			return prefs.IsLibraryPlaylistName(p.Name)
+		})
+
+		slog.DebugContext(ctx, "ensuring track index is synced")
+
+		added, changed, removed, err := s.trackIndex.Diff(ctx, userID, library)
+		if err != nil {
+			return nil, fmt.Errorf("checking if track index needs sync: %w", err)
+		}
+
+		if len(added)+len(changed)+len(removed) == 0 {
+			slog.DebugContext(ctx, "track index already up to date")
+			return nil, nil
+		}
+
+		slog.DebugContext(ctx, "populating tracks for track index", "added", len(added), "changed", len(changed), "removed", len(removed))
+
+		addedPlaylists, err := s.spotify.PopulatePlaylists(ctx, added)
+		if err != nil {
+			return nil, fmt.Errorf("populating added playlists: %w", err)
+		}
+		changedPlaylists, err := s.spotify.PopulatePlaylists(ctx, changed)
+		if err != nil {
+			return nil, fmt.Errorf("populating changed playlists: %w", err)
+		}
+		removedPlaylists, err := s.spotify.PopulatePlaylists(ctx, removed)
+		if err != nil {
+			return nil, fmt.Errorf("populating removed playlists: %w", err)
+		}
+
+		slog.DebugContext(ctx, "syncing track index")
+
+		if err := s.trackIndex.Sync(ctx, userID, addedPlaylists, changedPlaylists, removedPlaylists); err != nil {
+			return nil, fmt.Errorf("syncing track index: %w", err)
+		}
+
+		slog.DebugContext(ctx, "track index successfully synced")
+
+		return playlists, nil
+	})
 	if err != nil {
-		return fmt.Errorf("checking if track index needs sync: %w", err)
+		return nil, fmt.Errorf("getting playlists and syncing index: %w", err)
 	}
 
-	if len(added)+len(changed)+len(removed) == 0 {
-		slog.DebugContext(ctx, "track index already up to date")
-		return nil
-	}
-
-	slog.DebugContext(ctx, "populating tracks for track index", "added", len(added), "changed", len(changed), "removed", len(removed))
-
-	addedPlaylists, err := s.spotify.PopulatePlaylists(ctx, added)
-	if err != nil {
-		return fmt.Errorf("populating added playlists: %w", err)
-	}
-	changedPlaylists, err := s.spotify.PopulatePlaylists(ctx, changed)
-	if err != nil {
-		return fmt.Errorf("populating changed playlists: %w", err)
-	}
-	removedPlaylists, err := s.spotify.PopulatePlaylists(ctx, removed)
-	if err != nil {
-		return fmt.Errorf("populating removed playlists: %w", err)
-	}
-
-	slog.DebugContext(ctx, "syncing track index")
-
-	if err := s.trackIndex.Sync(ctx, userID, addedPlaylists, changedPlaylists, removedPlaylists); err != nil {
-		return fmt.Errorf("syncing track index: %w", err)
-	}
-
-	slog.DebugContext(ctx, "track index successfully synced")
-	return nil
+	return playlists, nil
 }
 
 func (s *service) albumForTrack(ctx context.Context, track spotify.FullTrack) (spotify.FullAlbum, error) {

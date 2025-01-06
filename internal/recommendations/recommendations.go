@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kristofferostlund/recommendli/pkg/singleflight"
+	"github.com/kristofferostlund/recommendli/pkg/slogutil"
 	"github.com/zmb3/spotify"
 )
 
@@ -55,13 +57,15 @@ type ServiceFactory struct {
 	store           KeyValueStore
 	userPreferences UserPreferenceProvider
 	trackIndex      TrackIndex
+	sfSyncIndex     singleflight.DoFunc[[]spotify.SimplePlaylist]
 }
 
-func NewServiceFactory(store KeyValueStore, userPreferences UserPreferenceProvider, trackIndex TrackIndex) *ServiceFactory {
+func NewServiceFactory(store KeyValueStore, userPreferences UserPreferenceProvider, trackIndex TrackIndex, sfLocker singleflight.Locker) *ServiceFactory {
 	return &ServiceFactory{
 		store:           store,
 		userPreferences: userPreferences,
 		trackIndex:      trackIndex,
+		sfSyncIndex:     singleflight.Prepare[[]spotify.SimplePlaylist](sfLocker, 500*time.Millisecond),
 	}
 }
 
@@ -71,6 +75,7 @@ func (f *ServiceFactory) New(spotifyProvider SpotifyProvider) *service {
 		userPreferences: f.userPreferences,
 		spotify:         spotifyProvider,
 		trackIndex:      f.trackIndex,
+		sfSyncIndex:     f.sfSyncIndex,
 	}
 }
 
@@ -79,6 +84,7 @@ type service struct {
 	userPreferences UserPreferenceProvider
 	spotify         SpotifyProvider
 	trackIndex      TrackIndex
+	sfSyncIndex     singleflight.DoFunc[[]spotify.SimplePlaylist]
 }
 
 type score struct {
@@ -179,7 +185,8 @@ func (s *service) CheckPlayingTrackInLibrary(ctx context.Context) (spotify.FullT
 		return spotify.FullTrack{}, nil, ErrNoCurrentTrack{usr: usr}
 	}
 
-	if err := s.prepareTrackIndexForUser(ctx, usr); err != nil {
+	ctx = slogutil.WithAttrs(ctx, slog.String("called_by", "CheckPlayingTrackInLibrary"))
+	if _, err := s.getPlaylistsAndSyncIndex(ctx, usr.ID); err != nil {
 		return spotify.FullTrack{}, nil, fmt.Errorf("getting track index: %w", err)
 	}
 
@@ -201,10 +208,12 @@ func (s *service) CheckPlayingTrackInLibrary(ctx context.Context) (spotify.FullT
 }
 
 func (s *service) CreateDiscoveryPlaylist(ctx context.Context) (spotify.FullPlaylist, error) {
+	ctx = slogutil.WithAttrs(ctx, slog.String("called_by", "CreateDiscoveryPlaylist"))
 	return s.generateDiscoveryPlaylist(ctx, false)
 }
 
 func (s *service) DryRunDiscoveryPlaylist(ctx context.Context) (spotify.FullPlaylist, error) {
+	ctx = slogutil.WithAttrs(ctx, slog.String("called_by", "DryRunDiscoveryPlaylist"))
 	return s.generateDiscoveryPlaylist(ctx, true)
 }
 
@@ -214,7 +223,8 @@ func (s *service) GetIndexSummary(ctx context.Context) (IndexSummary, error) {
 		return IndexSummary{}, fmt.Errorf("getting user: %w", err)
 	}
 
-	if err := s.prepareTrackIndexForUser(ctx, usr); err != nil {
+	ctx = slogutil.WithAttrs(ctx, slog.String("called_by", "GetIndexSummary"))
+	if _, err := s.getPlaylistsAndSyncIndex(ctx, usr.ID); err != nil {
 		return IndexSummary{}, fmt.Errorf("getting track index for user: %w", err)
 	}
 
@@ -226,51 +236,24 @@ func (s *service) GetIndexSummary(ctx context.Context) (IndexSummary, error) {
 	return summary, nil
 }
 
-func (s *service) prepareTrackIndexForUser(ctx context.Context, usr spotify.User) error {
-	playlists, err := s.spotify.ListPlaylists(ctx, usr.ID)
-	if err != nil {
-		return fmt.Errorf("listing user playlists: %w", err)
-	}
-	prefs, err := s.userPreferences.GetPreferences(ctx, usr.ID)
-	if err != nil {
-		return fmt.Errorf("getting user prefences: %w", err)
-	}
-	libraryPlaylists := filterSimplePlaylist(playlists, func(p spotify.SimplePlaylist) bool {
-		return prefs.IsLibraryPlaylistName(p.Name)
-	})
-
-	if err := s.ensureTrackIndexSynced(ctx, usr.ID, libraryPlaylists); err != nil {
-		return fmt.Errorf("checking if track index needs sync: %w", err)
-	}
-
-	return nil
-}
-
 func (s *service) generateDiscoveryPlaylist(ctx context.Context, dryRun bool) (spotify.FullPlaylist, error) {
 	usr, err := s.GetCurrentUser(ctx)
 	if err != nil {
-		return spotify.FullPlaylist{}, err
+		return spotify.FullPlaylist{}, fmt.Errorf("getting current user: %w", err)
 	}
 
-	playlists, err := s.spotify.ListPlaylists(ctx, usr.ID)
+	playlists, err := s.getPlaylistsAndSyncIndex(ctx, usr.ID)
 	if err != nil {
-		return spotify.FullPlaylist{}, fmt.Errorf("listing user playlists generating discovery playlist: %w", err)
+		return spotify.FullPlaylist{}, fmt.Errorf("syncing index: %w", err)
 	}
+
 	prefs, err := s.userPreferences.GetPreferences(ctx, usr.ID)
 	if err != nil {
 		return spotify.FullPlaylist{}, fmt.Errorf("getting user prefences: %w", err)
 	}
-
 	discoveryPlaylists := filterSimplePlaylist(playlists, func(p spotify.SimplePlaylist) bool {
 		return prefs.IsDiscoveryPlaylistName(p.Name)
 	})
-	libraryPlaylists := filterSimplePlaylist(playlists, func(p spotify.SimplePlaylist) bool {
-		return prefs.IsLibraryPlaylistName(p.Name)
-	})
-
-	if err := s.ensureTrackIndexSynced(ctx, usr.ID, libraryPlaylists); err != nil {
-		return spotify.FullPlaylist{}, fmt.Errorf("checking if track index needs sync: %w", err)
-	}
 
 	populatedDiscovery, err := s.spotify.PopulatePlaylists(ctx, discoveryPlaylists)
 	if err != nil {
