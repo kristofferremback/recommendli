@@ -42,7 +42,7 @@ func (s *service) getPlaylistsAndSyncIndex(ctx context.Context, userID string) (
 
 		if len(added)+len(changed)+len(removed) == 0 {
 			slog.DebugContext(ctx, "track index already up to date")
-			return nil, nil
+			return playlists, nil
 		}
 
 		slog.DebugContext(ctx, "populating tracks for track index", "added", len(added), "changed", len(changed), "removed", len(removed))
