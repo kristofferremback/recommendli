@@ -67,10 +67,10 @@ const NowPlaying = ({ track, inLibrary, inLibraryLoading, playlists }) => {
 
 const NothingPlaying = () => {
   return html`
-    <div>
-      <div>${'\u00a0'}</div>
-      <div>${'\u00a0'}</div>
-    </div>
+    <div>${'\u00a0'}</div>
+    <div>${'\u00a0'}</div>
+    <br />
+    <div>${'\u00a0'}</div>
   `
 }
 
