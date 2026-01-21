@@ -34,6 +34,7 @@ var ErrNoAuthentication error = errors.New("no authentication found")
 type AuthAdaptor struct {
 	authenticator              spotify.Authenticator
 	redirectURL, uiRedirectURL url.URL
+	secureCookies              bool
 }
 
 func NewSpotifyAuthAdaptor(clientID, clientSecret string, redirectURL, uiRedirectURL url.URL) *AuthAdaptor {
@@ -53,6 +54,7 @@ func NewSpotifyAuthAdaptor(clientID, clientSecret string, redirectURL, uiRedirec
 		authenticator: authenticator,
 		redirectURL:   redirectURL,
 		uiRedirectURL: uiRedirectURL,
+		secureCookies: redirectURL.Scheme == "https",
 	}
 }
 
@@ -102,7 +104,7 @@ func (a *AuthAdaptor) TokenCallbackHandler() http.HandlerFunc {
 			Value:    base64.StdEncoding.EncodeToString(tokenB),
 			Expires:  token.Expiry,
 			Path:     "/",
-			Secure:   true,
+			Secure:   a.secureCookies,
 			HttpOnly: true,
 			// @TODO: Read up on what cookie method to use so this is actually secure
 			SameSite: http.SameSiteLaxMode,
@@ -186,7 +188,7 @@ func (a *AuthAdaptor) redirect(w http.ResponseWriter, r *http.Request, redirectB
 		Value:    url.QueryEscape(state),
 		Expires:  time.Now().Add(time.Hour),
 		Path:     "/",
-		Secure:   true,
+		Secure:   a.secureCookies,
 		HttpOnly: true,
 		// @TODO: Read up on what cookie method to use so this is actually secure
 		SameSite: http.SameSiteLaxMode,
@@ -197,7 +199,7 @@ func (a *AuthAdaptor) redirect(w http.ResponseWriter, r *http.Request, redirectB
 		Value:    url.QueryEscape(redirectBackTo),
 		Expires:  time.Now().Add(time.Hour),
 		Path:     "/",
-		Secure:   true,
+		Secure:   a.secureCookies,
 		HttpOnly: true,
 		// @TODO: Read up on what cookie method to use so this is actually secure
 		SameSite: http.SameSiteLaxMode,
