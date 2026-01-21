@@ -44,3 +44,9 @@ dev-with-frontend:
 	cd frontend && npm run dev
 
 build-all: frontend-build build
+
+deploy: build-all
+	@echo "Restarting recommendli service..."
+	sudo systemctl restart recommendli
+	@echo "Deployment complete! Checking status..."
+	sudo systemctl status recommendli --no-pager

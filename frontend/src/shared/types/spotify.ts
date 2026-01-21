@@ -4,10 +4,17 @@ export interface Artist {
   external_urls: { spotify: string }
 }
 
+export interface SpotifyImage {
+  url: string
+  height: number
+  width: number
+}
+
 export interface Album {
   id: string
   name: string
   external_urls: { spotify: string }
+  images?: SpotifyImage[]
 }
 
 export interface Track {

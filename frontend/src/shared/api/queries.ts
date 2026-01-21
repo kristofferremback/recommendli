@@ -21,6 +21,7 @@ export function useCurrentTrack(enabled: boolean, refetchInterval: number | fals
     queryFn: api.getCurrentTrack,
     enabled,
     refetchInterval,
+    refetchIntervalInBackground: false, // Don't poll when tab is hidden
   })
 }
 
@@ -37,6 +38,7 @@ export function useIndexSummary(refetchInterval: number | false) {
     queryKey: queryKeys.indexSummary,
     queryFn: api.getIndexSummary,
     refetchInterval,
+    refetchIntervalInBackground: false, // Don't poll when tab is hidden
   })
 }
 

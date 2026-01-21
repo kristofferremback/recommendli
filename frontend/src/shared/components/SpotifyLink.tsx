@@ -12,7 +12,7 @@ export function SpotifyLink({ item }: SpotifyLinkProps) {
       href={item.external_urls.spotify}
       target="_blank"
       rel="noopener noreferrer"
-      className="text-blue-600 hover:text-blue-700 font-medium hover:underline transition-colors inline-flex items-center gap-1 group"
+      className="hover:text-green-400 hover:underline transition-colors inline-flex items-center gap-1 group"
     >
       <span>{item.name}</span>
       <svg className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" fill="currentColor" viewBox="0 0 20 20">
