@@ -88,7 +88,11 @@ func main() {
 	}
 	r.Mount("/recommendations", recommendatinsHandler)
 
-	fs := http.FileServer(http.Dir("./static"))
+	staticDir := "./static/dist"
+	if _, err := os.Stat(staticDir); os.IsNotExist(err) {
+		staticDir = "./static"
+	}
+	fs := http.FileServer(http.Dir(staticDir))
 	r.Handle("/*", srv.RedirectOn404(fs, "/index.html"))
 
 	errs := make(chan error, 2)

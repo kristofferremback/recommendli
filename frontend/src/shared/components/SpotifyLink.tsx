@@ -1,0 +1,24 @@
+import type { Track, Album, Playlist, SimplePlaylist, Artist } from '@/shared/types/spotify'
+
+type SpotifyLinkableItem = Track | Album | Playlist | SimplePlaylist | Artist
+
+interface SpotifyLinkProps {
+  item: SpotifyLinkableItem
+}
+
+export function SpotifyLink({ item }: SpotifyLinkProps) {
+  return (
+    <a
+      href={item.external_urls.spotify}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-blue-600 hover:text-blue-700 font-medium hover:underline transition-colors inline-flex items-center gap-1 group"
+    >
+      <span>{item.name}</span>
+      <svg className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" fill="currentColor" viewBox="0 0 20 20">
+        <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"></path>
+        <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"></path>
+      </svg>
+    </a>
+  )
+}

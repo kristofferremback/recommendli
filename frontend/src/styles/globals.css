@@ -1,0 +1,78 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 text-slate-900;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+  }
+
+  table[role="grid"] {
+    @apply border-collapse w-full;
+  }
+
+  table[role="grid"] thead tr {
+    @apply border-b-2 border-slate-200;
+  }
+
+  table[role="grid"] tbody tr {
+    @apply border-b border-slate-100 transition-colors hover:bg-blue-50/50;
+  }
+
+  table[role="grid"] th {
+    @apply px-3 py-3 text-left font-semibold text-slate-700 text-xs uppercase tracking-wider;
+  }
+
+  table[role="grid"] td {
+    @apply px-3 py-3;
+  }
+
+  details summary {
+    @apply cursor-pointer list-none font-medium text-slate-700 hover:text-blue-600 transition-colors;
+  }
+
+  details summary::-webkit-details-marker {
+    @apply hidden;
+  }
+
+  details summary::before {
+    content: '▶';
+    @apply inline-block mr-2 transition-transform text-blue-500;
+  }
+
+  details[open] summary::before {
+    @apply rotate-90;
+  }
+
+  details[open] {
+    @apply mt-1;
+  }
+}
+
+@layer components {
+  .card-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card-shimmer::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    animation: shimmer 3s infinite;
+  }
+
+  @keyframes shimmer {
+    100% {
+      left: 100%;
+    }
+  }
+}

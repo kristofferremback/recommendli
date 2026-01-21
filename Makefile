@@ -24,3 +24,23 @@ chmod-main:
 	chmod +x ./build/main
 
 build: build-main chmod-main
+
+# Frontend targets
+frontend-install:
+	cd frontend && npm install
+
+frontend-dev:
+	cd frontend && npm run dev
+
+frontend-build:
+	cd frontend && npm run build
+
+dev-with-frontend:
+	@echo "Starting Go backend on :9999 and Vite dev server on :5173"
+	@echo "Access app at http://127.0.0.1:5173"
+	$(call with_env,./.env)
+	@trap 'kill 0' EXIT; \
+	go run ./main.go & \
+	cd frontend && npm run dev
+
+build-all: frontend-build build
