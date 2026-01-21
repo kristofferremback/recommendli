@@ -1,5 +1,1 @@
-import hooks from 'https://cdn.skypack.dev/preact@10.5.15/hooks'
-
-export * from 'https://cdn.skypack.dev/preact@10.5.15/hooks'
-
-export default hooks
+export * from 'https://esm.sh/preact@10.5.15/hooks'

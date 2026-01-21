@@ -28,7 +28,7 @@ import (
 type Config struct {
 	SpotifyClientID     string `envconfig:"SPOTIFY_ID"`
 	SpotifyClientSecret string `envconfig:"SPOTIFY_SECRET"`
-	SpotifyRedirectHost string `envconfig:"SPOTIFY_REDIRECT_HOST" default:"http://0.0.0.0:9999"`
+	SpotifyRedirectHost string `envconfig:"SPOTIFY_REDIRECT_HOST" default:"http://localhost:9999"`
 	LogLevel            string `envconfig:"LOG_LEVEL" default:"info"`
 	Addr                string `envconfig:"ADDR" default:"0.0.0.0:9999"`
 	FileCacheBaseDir    string `envconfig:"FILE_CACHE_BASE_DIR" default:"/tmp/recommendli"`

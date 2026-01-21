@@ -1,5 +1,5 @@
-import htm from 'https://cdn.skypack.dev/htm'
+import htm from 'https://esm.sh/htm@3.1.1'
 
-export * from 'https://cdn.skypack.dev/htm'
+export * from 'https://esm.sh/htm@3.1.1'
 
 export default htm
