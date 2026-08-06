@@ -5,6 +5,11 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    background-color: #000;
+    color-scheme: dark;
+  }
+
   * {
     scrollbar-width: thin;
     scrollbar-color: rgba(139, 92, 246, 0.5) transparent;
@@ -29,6 +34,7 @@
   }
 
   body {
+    background-color: #000;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     min-height: 100vh;
     overflow-x: hidden;
