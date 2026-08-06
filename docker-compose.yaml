@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   recommendli:
     image: recommendli:${VERSION:-latest}
@@ -13,9 +11,10 @@ services:
     environment:
       SPOTIFY_ID: ${SPOTIFY_ID}
       SPOTIFY_SECRET: ${SPOTIFY_SECRET}
-      SPOTIFY_REDIRECT_HOST: ${SPOTIFY_REDIRECT_HOST:-}
+      SPOTIFY_REDIRECT_HOST: ${SPOTIFY_REDIRECT_HOST:-http://127.0.0.1:9999}
       ADDR: ${ADDR:-0.0.0.0:9999}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       FILE_CACHE_BASE_DIR: /var/recommendli
+      SQLITE_DB_PATH: /var/recommendli/recommendli.sqlite
     volumes:
       - ./data:/var/recommendli

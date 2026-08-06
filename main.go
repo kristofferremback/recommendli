@@ -1,15 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
-	"path"
 	"path/filepath"
-	"runtime"
 	"syscall"
 	"time"
 
@@ -30,7 +29,8 @@ type Config struct {
 	SpotifyClientSecret string `envconfig:"SPOTIFY_SECRET"`
 	SpotifyRedirectHost string `envconfig:"SPOTIFY_REDIRECT_HOST" default:"http://127.0.0.1:9999"`
 	LogLevel            string `envconfig:"LOG_LEVEL" default:"info"`
-	Addr                string `envconfig:"ADDR" default:"0.0.0.0:9999"`
+	Addr                string `envconfig:"ADDR"`
+	Port                string `envconfig:"PORT" default:"9999"`
 	FileCacheBaseDir    string `envconfig:"FILE_CACHE_BASE_DIR" default:"/tmp/recommendli"`
 	SQLiteDBPath        string `envconfig:"SQLITE_DB_PATH" default:"/tmp/recommendli.sqlite"`
 }
@@ -95,19 +95,28 @@ func main() {
 	fs := http.FileServer(http.Dir(staticDir))
 	r.Handle("/*", srv.RedirectOn404(fs, "/index.html"))
 
-	errs := make(chan error, 2)
+	server := &http.Server{Addr: cfg.Addr, Handler: r}
+	serverErrors := make(chan error, 1)
 	go func() {
 		slog.Info("Starting server", slog.String("addr", cfg.Addr))
-		errs <- http.ListenAndServe(cfg.Addr, r)
-	}()
-	go func() {
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, syscall.SIGINT)
-		<-c
-		errs <- nil
+		serverErrors <- server.ListenAndServe()
 	}()
 
-	err = <-errs
+	shutdownSignals := make(chan os.Signal, 1)
+	signal.Notify(shutdownSignals, syscall.SIGINT, syscall.SIGTERM)
+
+	select {
+	case err = <-serverErrors:
+	case sig := <-shutdownSignals:
+		slog.Info("Shutdown signal received", slog.String("signal", sig.String()))
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		err = server.Shutdown(shutdownCtx)
+		if err == nil {
+			err = <-serverErrors
+		}
+	}
+
 	if err != nil && err != http.ErrServerClosed {
 		slogutil.Fatal("Shutting down", slogutil.Error(err))
 	}
@@ -144,14 +153,23 @@ func getStatus() http.HandlerFunc {
 
 func loadConfig() (Config, error) {
 	var cfg Config
-	err := envconfig.Process("", &cfg)
-	if err != nil {
+	if err := envconfig.Process("", &cfg); err != nil {
 		return cfg, fmt.Errorf("loading config: %w", err)
 	}
+
+	// Railway supplies PORT at runtime. ADDR remains available as an explicit
+	// override for local development and other deployment environments.
+	if cfg.Addr == "" {
+		cfg.Addr = "0.0.0.0:" + cfg.Port
+	}
+
 	return cfg, nil
 }
 
 func absolutePathTo(relative string) string {
-	_, filename, _, _ := runtime.Caller(0)
-	return filepath.Clean(path.Join(path.Dir(filename), relative))
+	absolute, err := filepath.Abs(relative)
+	if err != nil {
+		return filepath.Clean(relative)
+	}
+	return absolute
 }
