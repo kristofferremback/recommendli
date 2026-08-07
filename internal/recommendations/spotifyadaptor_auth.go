@@ -27,6 +27,8 @@ const (
 	CookieState        = "recommendli_authstate"
 	CookieGoto         = "recommendli_goto"
 	CookieSpotifyToken = "recommendli_spotifytoken"
+	CookieAuthVersion  = "recommendli_authversion"
+	AuthVersion        = "2"
 )
 
 var ErrNoAuthentication error = errors.New("no authentication found")
@@ -47,6 +49,8 @@ func NewSpotifyAuthAdaptor(clientID, clientSecret string, redirectURL, uiRedirec
 		spotify.ScopeUserTopRead,
 		spotify.ScopeUserReadCurrentlyPlaying,
 		spotify.ScopeUserReadPlaybackState,
+		spotify.ScopeUserModifyPlaybackState,
+		spotify.ScopeUserReadRecentlyPlayed,
 	)
 	authenticator.SetAuthInfo(clientID, clientSecret)
 
@@ -109,6 +113,15 @@ func (a *AuthAdaptor) TokenCallbackHandler() http.HandlerFunc {
 			// @TODO: Read up on what cookie method to use so this is actually secure
 			SameSite: http.SameSiteLaxMode,
 		})
+		http.SetCookie(w, &http.Cookie{
+			Name:     CookieAuthVersion,
+			Value:    AuthVersion,
+			Expires:  token.Expiry,
+			Path:     "/",
+			Secure:   a.secureCookies,
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		})
 
 		gc, _ := r.Cookie(CookieGoto)
 		if gc != nil && gc.Value != "" {
@@ -146,7 +159,8 @@ func (a *AuthAdaptor) Middleware() func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 			c, _ := r.Cookie(CookieSpotifyToken)
-			if c != nil && c.Value != "" {
+			version, _ := r.Cookie(CookieAuthVersion)
+			if c != nil && c.Value != "" && version != nil && version.Value == AuthVersion {
 				token := &oauth2.Token{}
 				decoded, _ := base64.StdEncoding.DecodeString(c.Value)
 				err := json.Unmarshal(decoded, token)
@@ -178,6 +192,14 @@ func (a *AuthAdaptor) GetClient(r *http.Request) (spotify.Client, error) {
 	client := a.authenticator.NewClient(token)
 	client.AutoRetry = true
 	return client, nil
+}
+
+func (a *AuthAdaptor) GetHTTPClient(r *http.Request) (*http.Client, error) {
+	token, ok := r.Context().Value(ctxTokenKey).(*oauth2.Token)
+	if !ok {
+		return nil, ErrNoAuthentication
+	}
+	return oauth2.NewClient(r.Context(), oauth2.StaticTokenSource(token)), nil
 }
 
 func (a *AuthAdaptor) redirect(w http.ResponseWriter, r *http.Request, redirectBackTo string) {

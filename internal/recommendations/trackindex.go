@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/zmb3/spotify"
 )
@@ -19,9 +20,32 @@ type TrackIndex interface {
 }
 
 type IndexSummary struct {
-	PlaylistCount    int
-	UniqueTrackCount int
-	Playlists        []spotify.SimplePlaylist
+	PlaylistCount    int                      `json:"playlist_count"`
+	UniqueTrackCount int                      `json:"unique_track_count"`
+	Playlists        []spotify.SimplePlaylist `json:"playlists"`
+	LastSyncedAt     *time.Time               `json:"last_synced_at,omitempty"`
+}
+
+func indexSyncKey(userID string) string {
+	return fmt.Sprintf("track-index:last-synced:%s", userID)
+}
+
+func (s *service) getIndexSummary(ctx context.Context, userID string) (IndexSummary, error) {
+	summary, err := s.trackIndex.Summarize(ctx, userID)
+	if err != nil {
+		return IndexSummary{}, fmt.Errorf("summarizing track index: %w", err)
+	}
+
+	var syncedAt time.Time
+	if exists, err := s.store.Get(ctx, indexSyncKey(userID), &syncedAt); err != nil {
+		return IndexSummary{}, fmt.Errorf("getting track index sync time: %w", err)
+	} else if exists {
+		summary.LastSyncedAt = &syncedAt
+	}
+	if summary.Playlists == nil {
+		summary.Playlists = []spotify.SimplePlaylist{}
+	}
+	return summary, nil
 }
 
 func TrackKey(tt spotify.SimpleTrack) string {

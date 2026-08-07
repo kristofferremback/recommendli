@@ -73,7 +73,7 @@ function LoginPrompt() {
           </div>
 
           <p className="text-2xl text-purple-200 font-light">
-            Your personal music discovery engine
+            Filter, rank, and source new music
           </p>
         </div>
 
@@ -83,7 +83,7 @@ function LoginPrompt() {
             <div className="text-center space-y-4">
               <h2 className="text-3xl font-bold text-white">Ready to discover?</h2>
               <p className="text-lg text-purple-200">
-                Connect your Spotify account and unlock AI-powered music recommendations tailored to your taste.
+                Connect Spotify to filter discovery tracks against your library and build ranked playlists.
               </p>
             </div>
 
@@ -105,19 +105,19 @@ function LoginPrompt() {
                 <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                 </svg>
-                <span>100% Private</span>
+                <span>Reads playlists</span>
               </div>
               <div className="flex items-center gap-2">
                 <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                 </svg>
-                <span>Read-only access</span>
+                <span>Creates playlists</span>
               </div>
               <div className="flex items-center gap-2">
                 <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                 </svg>
-                <span>No posting</span>
+                <span>Controls active device</span>
               </div>
             </div>
           </div>

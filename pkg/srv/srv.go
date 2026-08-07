@@ -63,8 +63,8 @@ func respond(w http.ResponseWriter, body []byte, opts ...ResponseOptFunc) {
 		opt(ropts)
 	}
 
+	w.Header().Set("Content-Type", ropts.contentType)
 	w.WriteHeader(ropts.status)
-	w.Header().Set("content-type", ropts.contentType)
 	// nolint errcheck
 	w.Write(body)
 }

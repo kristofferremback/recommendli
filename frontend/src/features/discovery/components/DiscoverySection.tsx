@@ -30,7 +30,7 @@ export function DiscoverySection() {
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 md:gap-0 mb-6 md:mb-8">
           <div>
             <h2 className="text-2xl md:text-4xl font-black text-white mb-1 md:mb-2">Discovery Playlist</h2>
-            <p className="text-white/60 text-sm md:text-lg">AI-curated tracks based on your taste</p>
+            <p className="text-white/60 text-sm md:text-lg">Ranked tracks not already in your library</p>
           </div>
 
           <button
@@ -142,7 +142,7 @@ export function DiscoverySection() {
 
             <div className="text-center pt-6">
               <p className="text-white/40 text-sm">
-                {playlist.tracks.length} track{playlist.tracks.length !== 1 ? 's' : ''} • Powered by your listening history
+                {playlist.tracks.length} track{playlist.tracks.length !== 1 ? 's' : ''} • Ranked from Spotify discovery sources
               </p>
             </div>
           </div>

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/kristofferostlund/recommendli/pkg/paginator"
 	"github.com/kristofferostlund/recommendli/pkg/slogutil"
@@ -74,6 +75,9 @@ func (s *service) getPlaylistsAndSyncIndex(ctx context.Context, userID string) (
 		return nil, fmt.Errorf("getting playlists and syncing index: %w", err)
 	}
 
+	if err := s.store.Put(ctx, indexSyncKey(userID), time.Now().UTC()); err != nil {
+		return nil, fmt.Errorf("recording track index sync time: %w", err)
+	}
 	return playlists, nil
 }
 

@@ -2,11 +2,14 @@ package recommendations
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -18,6 +21,7 @@ import (
 
 const (
 	playlistIDKey = "playlistID"
+	trackIDKey    = "trackID"
 )
 
 func NewRouter(svcFactory *ServiceFactory, spotifyProviderFactory *SpotifyAdaptorFactory, auth *AuthAdaptor) *chi.Mux {
@@ -38,6 +42,17 @@ func NewRouter(svcFactory *ServiceFactory, spotifyProviderFactory *SpotifyAdapto
 	ar.Get("/v1/playlists/for", handler.withService(handler.getPlaylistMatchingPattern))
 	ar.Get("/v1/playlists/{playlistID}", handler.withService(handler.getPlaylist))
 	ar.Get("/v1/index/summary", handler.withService(handler.getIndexSummary))
+	ar.Post("/v1/index/sync", handler.withService(handler.syncIndex))
+	ar.Get("/v1/tracks/{trackID}/library-status", handler.withService(handler.getTrackLibraryStatus))
+	ar.Get("/v1/playback", handler.withService(handler.getPlayback))
+	ar.Get("/v1/playback/queue", handler.withService(handler.getPlaybackQueue))
+	ar.Get("/v1/playback/history", handler.withService(handler.getPlaybackHistory))
+	ar.Post("/v1/playback/play", handler.withService(handler.play))
+	ar.Post("/v1/playback/pause", handler.withService(handler.pause))
+	ar.Post("/v1/playback/next", handler.withService(handler.next))
+	ar.Post("/v1/playback/previous", handler.withService(handler.previous))
+	ar.Post("/v1/playback/seek", handler.withService(handler.seek))
+	ar.Post("/v1/playback/queue/skip", handler.withService(handler.skipPlaybackQueue))
 
 	return r
 }
@@ -57,6 +72,17 @@ type Service interface {
 	GetCurrentUser(ctx context.Context) (spotify.User, error)
 	GetCurrentUsersPlaylistMatchingPattern(ctx context.Context, pattern string) ([]spotify.FullPlaylist, error)
 	GetIndexSummary(ctx context.Context) (IndexSummary, error)
+	SyncIndex(ctx context.Context) (IndexSummary, error)
+	LookupTrackInLibrary(ctx context.Context, trackID string) ([]spotify.SimplePlaylist, error)
+	GetPlayback(ctx context.Context) (Playback, error)
+	GetPlaybackQueue(ctx context.Context) (PlaybackQueue, error)
+	GetPlaybackHistory(ctx context.Context, limit int) ([]spotify.RecentlyPlayedItem, error)
+	Play(ctx context.Context, trackID string) error
+	Pause(ctx context.Context) error
+	Next(ctx context.Context) error
+	Previous(ctx context.Context) error
+	Seek(ctx context.Context, positionMs int) error
+	SkipPlaybackQueue(ctx context.Context, req QueueSkipRequest) error
 	GetPlaylist(ctx context.Context, playlistID string) (spotify.FullPlaylist, error)
 	ListPlaylistsForCurrentUser(ctx context.Context) ([]spotify.SimplePlaylist, error)
 }
@@ -74,7 +100,13 @@ func (h *httpHandler) withService(sHandler spotifyClientHandlerFunc) http.Handle
 			srv.InternalServerError(w, err)
 			return
 		}
-		sHandler(h.svcFactory.New(h.spotifyProviderFactory.New(spotifyClient)))(w, r)
+		httpClient, err := h.auth.GetHTTPClient(r)
+		if err != nil {
+			slog.ErrorContext(ctx, "getting Spotify HTTP client", slogutil.Error(err))
+			srv.InternalServerError(w, err)
+			return
+		}
+		sHandler(h.svcFactory.New(h.spotifyProviderFactory.New(spotifyClient, httpClient)))(w, r)
 	}
 }
 
@@ -236,18 +268,192 @@ func (h *httpHandler) getIndexSummary(svc Service) http.HandlerFunc {
 		ctx := r.Context()
 		summary, err := svc.GetIndexSummary(ctx)
 		if err != nil {
-			slog.ErrorContext(ctx, "starting indexing", slogutil.Error(err))
+			slog.ErrorContext(ctx, "getting index summary", slogutil.Error(err))
+			srv.InternalServerError(w, err)
+			return
+		}
+		srv.JSON(w, summary)
+	}
+}
+
+func (h *httpHandler) syncIndex(svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		summary, err := svc.SyncIndex(r.Context())
+		if err != nil {
+			slog.ErrorContext(r.Context(), "syncing index", slogutil.Error(err))
+			srv.InternalServerError(w, err)
+			return
+		}
+		srv.JSON(w, summary)
+	}
+}
+
+func (h *httpHandler) getTrackLibraryStatus(svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		trackID := chi.URLParam(r, trackIDKey)
+		if trackID == "" {
+			srv.JSONError(w, errors.New("missing track ID in path"), srv.Status(http.StatusBadRequest))
+			return
+		}
+		playlists, err := svc.LookupTrackInLibrary(r.Context(), trackID)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "looking up track in library", slogutil.Error(err))
 			srv.InternalServerError(w, err)
 			return
 		}
 		srv.JSON(w, struct {
-			UniqueTrackCount int                      `json:"unique_track_count"`
-			PlaylistCount    int                      `json:"playlist_count"`
-			Playlists        []spotify.SimplePlaylist `json:"playlists"`
-		}{
-			PlaylistCount:    summary.PlaylistCount,
-			UniqueTrackCount: summary.UniqueTrackCount,
-			Playlists:        summary.Playlists,
+			InLibrary bool                     `json:"in_library"`
+			Playlists []spotify.SimplePlaylist `json:"playlists"`
+		}{InLibrary: len(playlists) > 0, Playlists: playlists})
+	}
+}
+
+func (h *httpHandler) getPlayback(svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		playback, err := svc.GetPlayback(r.Context())
+		if err != nil {
+			slog.ErrorContext(r.Context(), "getting playback", slogutil.Error(err))
+			srv.InternalServerError(w, err)
+			return
+		}
+		srv.JSON(w, playback)
+	}
+}
+
+func (h *httpHandler) getPlaybackQueue(svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		queue, err := svc.GetPlaybackQueue(r.Context())
+		if err != nil {
+			slog.ErrorContext(r.Context(), "getting playback queue", slogutil.Error(err))
+			srv.InternalServerError(w, err)
+			return
+		}
+		srv.JSON(w, queue)
+	}
+}
+
+func (h *httpHandler) getPlaybackHistory(svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		limit := 20
+		if value := r.URL.Query().Get("limit"); value != "" {
+			parsed, err := strconv.Atoi(value)
+			if err != nil || parsed < 1 || parsed > 50 {
+				srv.JSONError(w, errors.New("limit must be between 1 and 50"), srv.Status(http.StatusBadRequest))
+				return
+			}
+			limit = parsed
+		}
+		items, err := svc.GetPlaybackHistory(r.Context(), limit)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "getting playback history", slogutil.Error(err))
+			srv.InternalServerError(w, err)
+			return
+		}
+		srv.JSON(w, items)
+	}
+}
+
+func (h *httpHandler) play(svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			TrackID string `json:"track_id"`
+		}
+		if err := decodeOptionalJSON(r, &body); err != nil {
+			srv.JSONError(w, err, srv.Status(http.StatusBadRequest))
+			return
+		}
+		h.runPlaybackCommand(w, r, "starting playback", func(ctx context.Context) error {
+			return svc.Play(ctx, body.TrackID)
 		})
 	}
+}
+
+func (h *httpHandler) pause(svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		h.runPlaybackCommand(w, r, "pausing playback", svc.Pause)
+	}
+}
+
+func (h *httpHandler) next(svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		h.runPlaybackCommand(w, r, "skipping to next track", svc.Next)
+	}
+}
+
+func (h *httpHandler) previous(svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		h.runPlaybackCommand(w, r, "skipping to previous track", svc.Previous)
+	}
+}
+
+func (h *httpHandler) seek(svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			PositionMs int `json:"position_ms"`
+		}
+		if err := decodeJSON(r, &body); err != nil {
+			srv.JSONError(w, err, srv.Status(http.StatusBadRequest))
+			return
+		}
+		if body.PositionMs < 0 {
+			srv.JSONError(w, errors.New("position_ms cannot be negative"), srv.Status(http.StatusBadRequest))
+			return
+		}
+		h.runPlaybackCommand(w, r, "seeking playback", func(ctx context.Context) error {
+			return svc.Seek(ctx, body.PositionMs)
+		})
+	}
+}
+
+func (h *httpHandler) skipPlaybackQueue(svc Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body QueueSkipRequest
+		if err := decodeJSON(r, &body); err != nil {
+			srv.JSONError(w, err, srv.Status(http.StatusBadRequest))
+			return
+		}
+		if body.Position < 0 || body.ExpectedTrackID == "" {
+			srv.JSONError(w, errors.New("position and expected_track_id are required"), srv.Status(http.StatusBadRequest))
+			return
+		}
+		if err := svc.SkipPlaybackQueue(r.Context(), body); err != nil {
+			if errors.Is(err, ErrQueueChanged) {
+				srv.JSONError(w, err, srv.Status(http.StatusConflict))
+				return
+			}
+			slog.ErrorContext(r.Context(), "skipping playback queue", slogutil.Error(err))
+			srv.InternalServerError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+type playbackCommand func(context.Context) error
+
+func (h *httpHandler) runPlaybackCommand(w http.ResponseWriter, r *http.Request, action string, command playbackCommand) {
+	if err := command(r.Context()); err != nil {
+		slog.ErrorContext(r.Context(), action, slogutil.Error(err))
+		srv.InternalServerError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func decodeJSON(r *http.Request, out any) error {
+	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(out); err != nil {
+		return fmt.Errorf("invalid JSON body: %w", err)
+	}
+	return nil
+}
+
+func decodeOptionalJSON(r *http.Request, out any) error {
+	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(out); err != nil && !errors.Is(err, io.EOF) {
+		return fmt.Errorf("invalid JSON body: %w", err)
+	}
+	return nil
 }

@@ -27,6 +27,14 @@ type SpotifyProvider interface {
 	GetAlbums(ctx context.Context, albumIDs []string) ([]spotify.FullAlbum, error)
 	ListArtistAlbums(ctx context.Context, artistID string) ([]spotify.SimpleAlbum, error)
 	GetTrack(ctx context.Context, trackID string) (spotify.FullTrack, error)
+	PlaybackState(ctx context.Context) (*spotify.PlayerState, error)
+	PlaybackQueue(ctx context.Context) (PlaybackQueue, error)
+	RecentlyPlayed(ctx context.Context, limit int) ([]spotify.RecentlyPlayedItem, error)
+	Play(ctx context.Context, trackID string) error
+	Pause(ctx context.Context) error
+	Next(ctx context.Context) error
+	Previous(ctx context.Context) error
+	Seek(ctx context.Context, positionMs int) error
 }
 
 type UserPreferenceProvider interface {
@@ -222,18 +230,38 @@ func (s *service) GetIndexSummary(ctx context.Context) (IndexSummary, error) {
 	if err != nil {
 		return IndexSummary{}, fmt.Errorf("getting user: %w", err)
 	}
+	return s.getIndexSummary(ctx, usr.ID)
+}
 
-	ctx = slogutil.WithAttrs(ctx, slog.String("called_by", "GetIndexSummary"))
-	if _, err := s.getPlaylistsAndSyncIndex(ctx, usr.ID); err != nil {
-		return IndexSummary{}, fmt.Errorf("getting track index for user: %w", err)
-	}
-
-	summary, err := s.trackIndex.Summarize(ctx, usr.ID)
+func (s *service) SyncIndex(ctx context.Context) (IndexSummary, error) {
+	usr, err := s.GetCurrentUser(ctx)
 	if err != nil {
-		return IndexSummary{}, fmt.Errorf("getting index summary: %w", err)
+		return IndexSummary{}, fmt.Errorf("getting user: %w", err)
 	}
+	ctx = slogutil.WithAttrs(ctx, slog.String("called_by", "SyncIndex"))
+	if _, err := s.getPlaylistsAndSyncIndex(ctx, usr.ID); err != nil {
+		return IndexSummary{}, fmt.Errorf("syncing track index for user: %w", err)
+	}
+	return s.getIndexSummary(ctx, usr.ID)
+}
 
-	return summary, nil
+func (s *service) LookupTrackInLibrary(ctx context.Context, trackID string) ([]spotify.SimplePlaylist, error) {
+	usr, err := s.GetCurrentUser(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("getting user: %w", err)
+	}
+	track, err := s.spotify.GetTrack(ctx, trackID)
+	if err != nil {
+		return nil, fmt.Errorf("getting track %s: %w", trackID, err)
+	}
+	playlists, err := s.trackIndex.Lookup(ctx, usr.ID, track.SimpleTrack)
+	if err != nil {
+		return nil, fmt.Errorf("looking up track %s in library: %w", trackID, err)
+	}
+	if playlists == nil {
+		playlists = []spotify.SimplePlaylist{}
+	}
+	return playlists, nil
 }
 
 func (s *service) generateDiscoveryPlaylist(ctx context.Context, dryRun bool) (spotify.FullPlaylist, error) {

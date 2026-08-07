@@ -8,3 +8,6 @@ package-lock.json
 build
 
 data
+
+.threa-artifacts/
+.threa-attachments/

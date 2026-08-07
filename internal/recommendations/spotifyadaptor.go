@@ -3,6 +3,7 @@ package recommendations
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/kristofferostlund/recommendli/pkg/ctxhelper"
 	"github.com/kristofferostlund/recommendli/pkg/paginator"
@@ -10,8 +11,10 @@ import (
 )
 
 type SpotifyAdaptor struct {
-	spotify spotify.Client
-	kv      KeyValueStore
+	spotify    spotify.Client
+	http       *http.Client
+	apiBaseURL string
+	kv         KeyValueStore
 }
 
 type SpotifyAdaptorFactory struct {
@@ -22,8 +25,17 @@ func NewSpotifyProviderFactory(store KeyValueStore) *SpotifyAdaptorFactory {
 	return &SpotifyAdaptorFactory{store: store}
 }
 
-func (f *SpotifyAdaptorFactory) New(spotifyClient spotify.Client) *SpotifyAdaptor {
-	return &SpotifyAdaptor{spotify: spotifyClient, kv: f.store}
+func (f *SpotifyAdaptorFactory) New(spotifyClient spotify.Client, httpClients ...*http.Client) *SpotifyAdaptor {
+	var httpClient *http.Client
+	if len(httpClients) > 0 {
+		httpClient = httpClients[0]
+	}
+	return &SpotifyAdaptor{
+		spotify:    spotifyClient,
+		http:       httpClient,
+		apiBaseURL: spotifyAPIBaseURL,
+		kv:         f.store,
+	}
 }
 
 func (s *SpotifyAdaptor) CurrentUser(ctx context.Context) (spotify.User, error) {

@@ -1,4 +1,15 @@
-import type { User, CurrentTrackResponse, Playlist, CheckTrackResponse, IndexSummary } from '@/shared/types/spotify'
+import type {
+  User,
+  CurrentTrackResponse,
+  Playlist,
+  CheckTrackResponse,
+  IndexSummary,
+  LibraryStatus,
+  Playback,
+  PlaybackQueue,
+  RecentlyPlayedItem,
+  QueueSkipRequest,
+} from '@/shared/types/spotify'
 
 const BASE_URL = '/recommendations/v1'
 
@@ -19,6 +30,14 @@ async function fetchAPI(url: string, init?: RequestInit): Promise<Response> {
   }
 
   return response
+}
+
+async function postJSON(url: string, body?: unknown): Promise<void> {
+  await fetchAPI(url, {
+    method: 'POST',
+    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
 }
 
 export const api = {
@@ -50,4 +69,44 @@ export const api = {
     const res = await fetchAPI(`${BASE_URL}/index/summary`)
     return res.json()
   },
+
+  syncIndex: async (): Promise<IndexSummary> => {
+    const res = await fetchAPI(`${BASE_URL}/index/sync`, { method: 'POST' })
+    return res.json()
+  },
+
+  getTrackLibraryStatus: async (trackId: string): Promise<LibraryStatus> => {
+    const res = await fetchAPI(`${BASE_URL}/tracks/${encodeURIComponent(trackId)}/library-status`)
+    return res.json()
+  },
+
+  getPlayback: async (): Promise<Playback> => {
+    const res = await fetchAPI(`${BASE_URL}/playback`)
+    return res.json()
+  },
+
+  getPlaybackQueue: async (): Promise<PlaybackQueue> => {
+    const res = await fetchAPI(`${BASE_URL}/playback/queue`)
+    return res.json()
+  },
+
+  getPlaybackHistory: async (limit = 20): Promise<RecentlyPlayedItem[]> => {
+    const res = await fetchAPI(`${BASE_URL}/playback/history?limit=${limit}`)
+    return res.json()
+  },
+
+  play: (trackId?: string): Promise<void> =>
+    postJSON(`${BASE_URL}/playback/play`, trackId ? { track_id: trackId } : undefined),
+
+  pause: (): Promise<void> => postJSON(`${BASE_URL}/playback/pause`),
+
+  next: (): Promise<void> => postJSON(`${BASE_URL}/playback/next`),
+
+  previous: (): Promise<void> => postJSON(`${BASE_URL}/playback/previous`),
+
+  seek: (positionMs: number): Promise<void> =>
+    postJSON(`${BASE_URL}/playback/seek`, { position_ms: positionMs }),
+
+  skipPlaybackQueue: (request: QueueSkipRequest): Promise<void> =>
+    postJSON(`${BASE_URL}/playback/queue/skip`, request),
 }
