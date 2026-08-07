@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
+import type { Playback, QueueSkipRequest, Track } from '@/shared/types/spotify'
 
 export const queryKeys = {
   user: ['user'] as const,
@@ -94,22 +95,118 @@ export function useSyncIndex() {
   })
 }
 
+type PlaybackMutationContext = {
+  previous?: Playback
+  expectedTrackId?: string
+}
+
 export function usePlaybackControls() {
   const queryClient = useQueryClient()
-  const refresh = () => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.playback })
+  const current = () => queryClient.getQueryData<Playback>(queryKeys.playback)
+  const setPlayback = (playback?: Playback) => {
+    if (playback) queryClient.setQueryData(queryKeys.playback, playback)
+  }
+  const optimistic = (update: (playback: Playback) => Playback): PlaybackMutationContext => {
+    const previous = current()
+    if (previous) setPlayback(update(previous))
+    return { previous }
+  }
+  const optimisticTrack = (track?: Track): PlaybackMutationContext => {
+    const context = optimistic(playback => track ? {
+      ...playback,
+      active: true,
+      is_playing: true,
+      progress_ms: 0,
+      timestamp: Date.now(),
+      track,
+    } : playback)
+    return { ...context, expectedTrackId: track?.id }
+  }
+  const rollback = (_error: Error, _variables: unknown, context?: PlaybackMutationContext) => {
+    setPlayback(context?.previous)
+  }
+  const refreshTimeline = () => {
     queryClient.invalidateQueries({ queryKey: queryKeys.playbackQueue })
     queryClient.invalidateQueries({ queryKey: queryKeys.playbackHistory })
   }
+  const reconcile = (matches: (playback: Playback) => boolean) => {
+    void reconcilePlayback(matches).then(playback => {
+      if (playback) setPlayback(playback)
+      refreshTimeline()
+    })
+  }
 
   return {
-    play: useMutation({ mutationFn: api.play, onSuccess: refresh }),
-    pause: useMutation({ mutationFn: api.pause, onSuccess: refresh }),
-    next: useMutation({ mutationFn: api.next, onSuccess: refresh }),
-    previous: useMutation({ mutationFn: api.previous, onSuccess: refresh }),
-    seek: useMutation({ mutationFn: api.seek, onSuccess: refresh }),
-    skipQueue: useMutation({ mutationFn: api.skipPlaybackQueue, onSuccess: refresh }),
+    play: useMutation<void, Error, string | undefined, PlaybackMutationContext>({
+      mutationFn: api.play,
+      onMutate: trackId => {
+        if (!trackId) return optimistic(playback => ({ ...playback, is_playing: true, timestamp: Date.now() }))
+        const queue = queryClient.getQueryData<{ tracks: Track[] }>(queryKeys.playbackQueue)
+        const history = queryClient.getQueryData<Array<{ track: Track }>>(queryKeys.playbackHistory)
+        return optimisticTrack(queue?.tracks.find(track => track.id === trackId) ?? history?.find(item => item.track.id === trackId)?.track)
+      },
+      onError: rollback,
+      onSuccess: (_data, trackId) => reconcile(playback => playback.is_playing && (!trackId || playback.track?.id === trackId)),
+    }),
+    pause: useMutation<void, Error, void, PlaybackMutationContext>({
+      mutationFn: api.pause,
+      onMutate: () => optimistic(playback => ({ ...playback, is_playing: false })),
+      onError: rollback,
+      onSuccess: () => reconcile(playback => !playback.is_playing),
+    }),
+    next: useMutation<void, Error, void, PlaybackMutationContext>({
+      mutationFn: api.next,
+      onMutate: () => {
+        const queue = queryClient.getQueryData<{ tracks: Track[] }>(queryKeys.playbackQueue)
+        return optimisticTrack(queue?.tracks[0])
+      },
+      onError: rollback,
+      onSuccess: (_data, _variables, context) => reconcile(playback => context?.expectedTrackId
+        ? playback.track?.id === context.expectedTrackId
+        : playback.track?.id !== context?.previous?.track?.id),
+    }),
+    previous: useMutation<void, Error, void, PlaybackMutationContext>({
+      mutationFn: api.previous,
+      onMutate: () => {
+        const history = queryClient.getQueryData<Array<{ track: Track }>>(queryKeys.playbackHistory)
+        return optimisticTrack(history?.[0]?.track)
+      },
+      onError: rollback,
+      onSuccess: (_data, _variables, context) => reconcile(playback => context?.expectedTrackId
+        ? playback.track?.id === context.expectedTrackId
+        : playback.track?.id !== context?.previous?.track?.id),
+    }),
+    seek: useMutation<void, Error, number, PlaybackMutationContext>({
+      mutationFn: api.seek,
+      onMutate: positionMs => optimistic(playback => ({ ...playback, progress_ms: positionMs, timestamp: Date.now() })),
+      onError: rollback,
+      onSuccess: (_data, positionMs) => reconcile(playback => Math.abs(playback.progress_ms - positionMs) < 3000),
+    }),
+    skipQueue: useMutation<void, Error, QueueSkipRequest, PlaybackMutationContext>({
+      mutationFn: api.skipPlaybackQueue,
+      onMutate: request => {
+        const queue = queryClient.getQueryData<{ tracks: Track[] }>(queryKeys.playbackQueue)
+        return optimisticTrack(queue?.tracks[request.position])
+      },
+      onError: rollback,
+      onSuccess: (_data, request) => reconcile(playback => playback.track?.id === request.expected_track_id),
+    }),
   }
+}
+
+async function reconcilePlayback(matches: (playback: Playback) => boolean): Promise<Playback | undefined> {
+  const delays = [120, 250, 450, 800, 1300, 2000]
+  let latest: Playback | undefined
+  for (const delay of delays) {
+    await new Promise(resolve => window.setTimeout(resolve, delay))
+    try {
+      latest = await api.getPlayback()
+      if (matches(latest)) return latest
+    } catch {
+      // The normal query error state handles persistent Spotify/API failures.
+    }
+  }
+  return latest
 }
 
 export function useGenerateDiscoveryPlaylist() {

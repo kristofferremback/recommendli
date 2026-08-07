@@ -138,15 +138,11 @@ function PlayerWindow({ playback, loading, open, toggle }: {
             ) : (
               <><span className="rh-track-name">NOTHING PLAYING</span><span className="rh-artist">OPEN SPOTIFY ON A DEVICE</span></>
             )}
-            <input
-              className="rh-seek"
-              type="range"
-              min={0}
-              max={Math.max(duration, 1)}
-              value={Math.min(progress, duration || 1)}
+            <SeekBar
+              progress={progress}
+              duration={duration}
               disabled={!controllable || !duration}
-              aria-label="Playback position"
-              onChange={event => controls.seek.mutate(Number(event.target.value))}
+              onCommit={position => controls.seek.mutate(position)}
             />
           </div>
         </div>
@@ -270,5 +266,16 @@ function usePluginLayout(): [PluginName[], React.Dispatch<React.SetStateAction<P
   return [open, setOpen]
 }
 function readLayout(desktop: boolean): PluginName[] { try { const value = JSON.parse(localStorage.getItem(`recommendli-layout-${desktop ? 'desktop' : 'mobile'}-v1`) ?? 'null'); if (Array.isArray(value)) return value.filter(item => plugins.includes(item)) } catch {} return desktop ? [...plugins] : [] }
+function SeekBar({ progress, duration, disabled, onCommit }: { progress: number; duration: number; disabled: boolean; onCommit: (position: number) => void }) {
+  const [value, setValue] = useState(progress)
+  const dragging = useRef(false)
+  useEffect(() => { if (!dragging.current) setValue(progress) }, [progress])
+  const commit = () => {
+    if (!dragging.current) return
+    dragging.current = false
+    onCommit(value)
+  }
+  return <input className="rh-seek" type="range" min={0} max={Math.max(duration, 1)} value={Math.min(value, duration || 1)} disabled={disabled} aria-label="Playback position" onPointerDown={() => { dragging.current = true }} onChange={event => setValue(Number(event.target.value))} onPointerUp={commit} onKeyDown={() => { dragging.current = true }} onKeyUp={commit} />
+}
 function usePlaybackProgress(playback?: Playback) { const [progress, setProgress] = useState(playback?.progress_ms ?? 0); useEffect(() => { const update = () => setProgress(Math.min((playback?.progress_ms ?? 0) + (playback?.is_playing ? Math.max(0, Date.now() - (playback.timestamp || Date.now())) : 0), playback?.track?.duration_ms ?? Number.MAX_SAFE_INTEGER)); update(); const timer = window.setInterval(update, 500); return () => window.clearInterval(timer) }, [playback]); return progress }
 function formatTime(milliseconds: number) { const seconds = Math.max(0, Math.floor(milliseconds / 1000)); return `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}` }
