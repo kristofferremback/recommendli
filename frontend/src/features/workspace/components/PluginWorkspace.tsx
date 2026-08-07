@@ -308,7 +308,7 @@ function SeekBar({ progress, duration, disabled, onCommit }: { progress: number;
     dragging.current = false
     onCommit(value)
   }
-  return <input className="rh-seek" type="range" min={0} max={Math.max(duration, 1)} value={Math.min(value, duration || 1)} disabled={disabled} aria-label="Playback position" onPointerDown={() => { dragging.current = true }} onChange={event => setValue(Number(event.target.value))} onPointerUp={commit} onKeyDown={() => { dragging.current = true }} onKeyUp={commit} />
+  return <input className="rh-seek" style={{ '--rh-progress': `${duration ? Math.min(100, value / duration * 100) : 0}%` } as React.CSSProperties} type="range" min={0} max={Math.max(duration, 1)} value={Math.min(value, duration || 1)} disabled={disabled} aria-label="Playback position" onPointerDown={() => { dragging.current = true }} onChange={event => setValue(Number(event.target.value))} onPointerUp={commit} onKeyDown={() => { dragging.current = true }} onKeyUp={commit} />
 }
 function usePlaybackProgress(playback?: Playback) { const [progress, setProgress] = useState(playback?.progress_ms ?? 0); useEffect(() => { const update = () => setProgress(Math.min((playback?.progress_ms ?? 0) + (playback?.is_playing ? Math.max(0, Date.now() - (playback.timestamp || Date.now())) : 0), playback?.track?.duration_ms ?? Number.MAX_SAFE_INTEGER)); update(); const timer = window.setInterval(update, 500); return () => window.clearInterval(timer) }, [playback]); return progress }
 function formatTime(milliseconds: number) { const seconds = Math.max(0, Math.floor(milliseconds / 1000)); return `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}` }
