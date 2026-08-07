@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
-  Clock3, Database, Disc3, ExternalLink, Library, ListEnd, ListMusic,
+  AlertTriangle, Clock3, Database, Disc3, ExternalLink, Library, ListEnd, ListMusic,
   Music2, Pause, Play, Plus, RefreshCw, Search, SkipBack, SkipForward, X,
 } from 'lucide-react'
 import { useDocumentVisibility } from '@/shared/hooks/useDocumentVisibility'
@@ -48,6 +49,8 @@ export function PluginWorkspace() {
         <PlayerWindow
           playback={playback.data}
           loading={playback.isLoading}
+          error={playback.error}
+          retry={() => playback.refetch()}
           open={open}
           toggle={toggle}
         />
@@ -81,9 +84,11 @@ export function PluginWorkspace() {
   )
 }
 
-function PlayerWindow({ playback, loading, open, toggle }: {
+function PlayerWindow({ playback, loading, error, retry, open, toggle }: {
   playback?: Playback
   loading: boolean
+  error: Error | null
+  retry: () => void
   open: PluginName[]
   toggle: (plugin: PluginName) => void
 }) {
@@ -114,12 +119,13 @@ function PlayerWindow({ playback, loading, open, toggle }: {
           </div>
           <div className="rh-readout">
             <div className="rh-clock">{formatTime(progress)}</div>
+            {error && <LocalError retry={retry} />}
             <div className={`rh-meter ${playback?.is_playing ? 'is-playing' : ''}`} aria-hidden="true">
               {[35, 72, 48, 88, 61, 40, 78].map((height, i) => <i key={i} style={{ height: `${height}%` }} />)}
             </div>
             {loading ? (
-              <div className="rh-muted">···</div>
-            ) : track ? (
+              <div className="rh-muted rh-loading-bars">···</div>
+            ) : error ? null : track ? (
               <>
                 <a className="rh-track-name" href={track.external_urls?.spotify} target="_blank" rel="noreferrer">{track.name}</a>
                 <span className="rh-artist">{track.artists.map(artist => artist.name).join(', ')}</span>
@@ -176,6 +182,7 @@ function QueueWindow({ playback, close }: { playback?: Playback; close: () => vo
         <button className={tab === 'queue' ? 'active' : ''} onClick={() => setTab('queue')} aria-label="Queue"><ListEnd /> {queue.data?.tracks.length ?? 0}</button>
       </div>
       <div className="rh-current"><Play /> <b>{playback?.track?.name ?? '—'}</b><span>{formatTime(playback?.progress_ms ?? 0)} / {formatTime(playback?.track?.duration_ms ?? 0)}</span></div>
+      {(queue.error || history.error) && <LocalError retry={() => { queue.refetch(); history.refetch() }} />}
       <div className="rh-timeline-grid">
         <TrackList title={<Clock3 />} count={history.data?.length ?? 0} className={tab === 'history' ? 'mobile-active' : ''}>
           {history.data?.map((item, i) => (
@@ -203,6 +210,7 @@ function DiscoveryWindow({ indexCount, onResult, close }: { indexCount?: number;
         <div className="rh-filter"><Database /><b>{indexCount?.toLocaleString() ?? '—'}</b></div>
         <div className="rh-lcd rh-output"><ListMusic /><strong>RECOMMENDLI DISCOVERY</strong><span>{generation.data?.tracks.length ?? 0}</span></div>
       </div>
+      {generation.error && <LocalError retry={build} />}
       <div className="rh-build"><HardwareButton primary label="Build playlist" disabled={generation.isPending} onClick={build}><Plus /> {generation.isPending ? 'BUILDING' : 'BUILD PLAYLIST'}</HardwareButton></div>
       <div className="rh-stages">{[ListMusic, Database, Disc3, Plus].map((Icon, i) => <i key={i} className={generation.isPending && i === 2 ? 'active' : generation.isSuccess ? 'done' : ''}><Icon /></i>)}</div>
     </HardwareWindow>
@@ -231,15 +239,40 @@ function LibraryWindow({ close }: { close: () => void }) {
   const index = useIndexSummary(false)
   const sync = useSyncIndex()
   const [search, setSearch] = useState('')
+  const [drawer, setDrawer] = useState(false)
   const playlists = useMemo(() => (index.data?.playlists ?? []).filter(p => p.name.toLowerCase().includes(search.toLowerCase())).sort((a, b) => b.name.localeCompare(a.name, 'en-US', { numeric: true })), [index.data, search])
+  const browser = <><label className="rh-search"><Search /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search playlists" /></label><PlaylistRows playlists={playlists} /></>
   return (
-    <HardwareWindow className="rh-library" code="R // LIBRARY" onClose={close}>
-      <div className="rh-lcd rh-stats"><Stat icon={<Music2 />} value={index.data?.unique_track_count} /><Stat icon={<ListMusic />} value={index.data?.playlist_count} /></div>
-      <label className="rh-search"><Search /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search playlists" /></label>
-      <div className="rh-playlists">{playlists.map((playlist, i) => <div key={playlist.id}><span>{String(i + 1).padStart(2, '0')}</span><b>{playlist.name}</b><small>{playlist.tracks?.total ?? '—'}</small><a href={playlist.external_urls.spotify} target="_blank" rel="noreferrer" aria-label={`Open ${playlist.name}`}><ExternalLink /></a></div>)}</div>
-      <div className="rh-sync"><span><Clock3 /> {index.data?.last_synced_at ? new Date(index.data.last_synced_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</span><button onClick={() => sync.mutate()} disabled={sync.isPending} aria-label="Synchronize library"><RefreshCw className={sync.isPending ? 'spin' : ''} /></button></div>
-    </HardwareWindow>
+    <>
+      <HardwareWindow className="rh-library" code="R // LIBRARY" onClose={close}>
+        <div className="rh-lcd rh-stats"><Stat icon={<Music2 />} value={index.data?.unique_track_count} /><Stat icon={<ListMusic />} value={index.data?.playlist_count} /></div>
+        {(index.error || sync.error) && <LocalError retry={() => sync.mutate()} />}
+        <div className="rh-desktop-browser">{browser}</div>
+        <button className="rh-open-browser" onClick={() => setDrawer(true)}><ListMusic /> <span>{index.data?.playlist_count ?? 0}</span></button>
+        <div className="rh-sync"><span><Clock3 /> {index.data?.last_synced_at ? new Date(index.data.last_synced_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</span><button onClick={() => sync.mutate()} disabled={sync.isPending} aria-label="Synchronize library"><RefreshCw className={sync.isPending ? 'spin' : ''} /></button></div>
+      </HardwareWindow>
+      {drawer && createPortal(<PlaylistDrawer close={() => setDrawer(false)}>{browser}</PlaylistDrawer>, document.body)}
+    </>
   )
+}
+
+function PlaylistRows({ playlists }: { playlists: Array<{ id: string; name: string; tracks?: { total: number }; external_urls: { spotify: string } }> }) {
+  return <div className="rh-playlists">{playlists.map((playlist, i) => <div key={playlist.id}><span>{String(i + 1).padStart(2, '0')}</span><b>{playlist.name}</b><small>{playlist.tracks?.total ?? '—'}</small><a href={playlist.external_urls.spotify} target="_blank" rel="noreferrer" aria-label={`Open ${playlist.name}`}><ExternalLink /></a></div>)}</div>
+}
+
+function PlaylistDrawer({ close, children }: { close: () => void; children: React.ReactNode }) {
+  useEffect(() => {
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const keydown = (event: KeyboardEvent) => { if (event.key === 'Escape') close() }
+    window.addEventListener('keydown', keydown)
+    return () => { document.body.style.overflow = previous; window.removeEventListener('keydown', keydown) }
+  }, [close])
+  return <aside className="rh-drawer" role="dialog" aria-modal="true" aria-label="Playlists"><header className="rh-title"><span>R // PLAYLISTS</span><button onClick={close} aria-label="Close playlists"><X /></button></header>{children}</aside>
+}
+
+function LocalError({ retry }: { retry: () => void }) {
+  return <div className="rh-local-error" role="alert"><AlertTriangle /><span>ERR</span><button onClick={retry} aria-label="Retry"><RefreshCw /></button></div>
 }
 
 function HardwareWindow({ code, onClose, children, className = '', fixed = false }: { code: string; onClose?: () => void; children: React.ReactNode; className?: string; fixed?: boolean }) {
