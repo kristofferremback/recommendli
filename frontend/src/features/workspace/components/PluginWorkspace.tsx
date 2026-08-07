@@ -262,12 +262,14 @@ function LibraryWindow({ close }: { close: () => void }) {
   return (
     <>
       <HardwareWindow className="rh-library" code="R // LIBRARY" onClose={close}>
-        <div className="rh-lcd rh-stats"><Stat icon={<Music2 />} value={index.data?.unique_track_count} /><Stat icon={<ListMusic />} value={index.data?.playlist_count} /></div>
-        {(index.error || sync.error) && <LocalError retry={() => sync.mutate()} />}
-        <div className="rh-desktop-browser">{browser}</div>
-        <div className="rh-mobile-preview"><PlaylistRows playlists={allPlaylists.slice(0, 5)} compact /></div>
-        <button className="rh-open-browser" onClick={() => setDrawer(true)}><Search /> <ListMusic /> <span>{index.data?.playlist_count ?? 0}</span></button>
-        <div className="rh-sync"><span><Clock3 /> {index.data?.last_synced_at ? new Date(index.data.last_synced_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</span><button onClick={() => sync.mutate()} disabled={sync.isPending} aria-label="Synchronize library"><RefreshCw className={sync.isPending ? 'spin' : ''} /></button></div>
+        <div className="rh-library-body">
+          <div className="rh-lcd rh-stats"><Stat icon={<Music2 />} value={index.data?.unique_track_count} /><Stat icon={<ListMusic />} value={index.data?.playlist_count} /></div>
+          {(index.error || sync.error) && <LocalError retry={() => sync.mutate()} />}
+          <div className="rh-desktop-browser">{browser}</div>
+          <div className="rh-mobile-preview"><PlaylistRows playlists={allPlaylists.slice(0, 5)} compact /></div>
+          <button className="rh-open-browser" onClick={() => setDrawer(true)}><Search /> <ListMusic /> <span>{index.data?.playlist_count ?? 0}</span></button>
+          <div className="rh-sync"><span><Clock3 /> {index.data?.last_synced_at ? new Date(index.data.last_synced_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</span><button onClick={() => sync.mutate()} disabled={sync.isPending} aria-label="Synchronize library"><RefreshCw className={sync.isPending ? 'spin' : ''} /></button></div>
+        </div>
       </HardwareWindow>
       {drawer && createPortal(<PlaylistDrawer close={closeDrawer}>{browser}</PlaylistDrawer>, document.body)}
     </>
@@ -305,7 +307,7 @@ function PlaylistDrawer({ close, children }: { close: () => void; children: Reac
       window.scrollTo(0, scrollY)
     }
   }, [close])
-  return <aside className="rh-drawer" role="dialog" aria-modal="true" aria-label="Playlists"><header className="rh-title"><span>R // PLAYLISTS</span><button onClick={close} aria-label="Close playlists"><X /></button></header>{children}</aside>
+  return <aside className="rh-drawer" role="dialog" aria-modal="true" aria-label="Playlists"><header className="rh-title"><span>R // PLAYLISTS</span><button onClick={close} aria-label="Close playlists"><X /></button></header><div className="rh-drawer-body">{children}</div></aside>
 }
 
 function LocalError({ retry }: { retry: () => void }) {
