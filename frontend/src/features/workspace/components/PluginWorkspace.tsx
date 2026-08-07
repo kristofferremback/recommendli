@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   AlertTriangle, Clock3, Database, Disc3, ExternalLink, Library, ListEnd, ListMusic,
@@ -21,6 +21,16 @@ export function PluginWorkspace() {
   const [open, setOpen] = usePluginLayout()
   const [result, setResult] = useState<Playlist | null>(null)
   const playback = usePlayback(visible, visible ? 4000 : false)
+  const wasVisible = useRef(visible)
+  useEffect(() => {
+    if (visible && !wasVisible.current) void playback.refetch()
+    wasVisible.current = visible
+  }, [visible, playback.refetch])
+  useEffect(() => {
+    const refresh = () => { if (!document.hidden) void playback.refetch() }
+    window.addEventListener('focus', refresh)
+    return () => window.removeEventListener('focus', refresh)
+  }, [playback.refetch])
   const index = useIndexSummary(false)
   const sync = useSyncIndex()
   const attemptedSync = useRef(false)
@@ -95,6 +105,8 @@ function PlayerWindow({ playback, loading, error, retry, open, toggle }: {
   const controls = usePlaybackControls()
   const track = playback?.track
   const status = useTrackLibraryStatus(track?.id, !!track)
+  const [membershipOpen, setMembershipOpen] = useState(false)
+  useEffect(() => setMembershipOpen(false), [track?.id])
   const progress = usePlaybackProgress(playback)
   const duration = track?.duration_ms ?? 0
   const controllable = !!playback?.active && !!playback.device && !playback.device.is_restricted
@@ -129,17 +141,20 @@ function PlayerWindow({ playback, loading, error, retry, open, toggle }: {
               <>
                 <a className="rh-track-name" href={track.external_urls?.spotify} target="_blank" rel="noreferrer">{track.name}</a>
                 <span className="rh-artist">{track.artists.map(artist => artist.name).join(', ')}</span>
-                <details className={`rh-membership ${status.data?.in_library ? 'is-member' : 'is-new'}`}>
-                  <summary>
-                    <Library aria-hidden="true" />
-                    {status.isLoading ? 'CHECKING' : status.data?.in_library ? `IN LIBRARY · ${status.data.playlists.length}` : 'NEW TO LIBRARY'}
-                  </summary>
-                  {status.data?.playlists.map(playlist => (
+                <div className={`rh-membership ${status.data?.in_library ? 'is-member' : 'is-new'}`}>
+                  {status.data?.in_library ? (
+                    <button className="rh-membership-button" aria-expanded={membershipOpen} onClick={() => setMembershipOpen(open => !open)}>
+                      <Library aria-hidden="true" /> IN LIBRARY · {status.data.playlists.length}
+                    </button>
+                  ) : (
+                    <span className="rh-membership-state"><Library aria-hidden="true" /> {status.isLoading ? 'CHECKING' : 'NEW TO LIBRARY'}</span>
+                  )}
+                  {membershipOpen && <div className="rh-membership-popover">{status.data?.playlists.map(playlist => (
                     <a key={playlist.id} href={playlist.external_urls.spotify} target="_blank" rel="noreferrer">
-                      {playlist.name}<ExternalLink aria-hidden="true" />
+                      <span>{playlist.name}</span><ExternalLink aria-hidden="true" />
                     </a>
-                  ))}
-                </details>
+                  ))}</div>}
+                </div>
               </>
             ) : (
               <><span className="rh-track-name">NOTHING PLAYING</span><span className="rh-artist">OPEN SPOTIFY ON A DEVICE</span></>
@@ -240,7 +255,9 @@ function LibraryWindow({ close }: { close: () => void }) {
   const sync = useSyncIndex()
   const [search, setSearch] = useState('')
   const [drawer, setDrawer] = useState(false)
-  const playlists = useMemo(() => (index.data?.playlists ?? []).filter(p => p.name.toLowerCase().includes(search.toLowerCase())).sort((a, b) => b.name.localeCompare(a.name, 'en-US', { numeric: true })), [index.data, search])
+  const closeDrawer = useCallback(() => setDrawer(false), [])
+  const allPlaylists = index.data?.playlists ?? []
+  const playlists = useMemo(() => allPlaylists.filter(p => p.name.toLowerCase().includes(search.toLowerCase())), [allPlaylists, search])
   const browser = <><label className="rh-search"><Search /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search playlists" /></label><PlaylistRows playlists={playlists} /></>
   return (
     <>
@@ -248,25 +265,45 @@ function LibraryWindow({ close }: { close: () => void }) {
         <div className="rh-lcd rh-stats"><Stat icon={<Music2 />} value={index.data?.unique_track_count} /><Stat icon={<ListMusic />} value={index.data?.playlist_count} /></div>
         {(index.error || sync.error) && <LocalError retry={() => sync.mutate()} />}
         <div className="rh-desktop-browser">{browser}</div>
-        <button className="rh-open-browser" onClick={() => setDrawer(true)}><ListMusic /> <span>{index.data?.playlist_count ?? 0}</span></button>
+        <div className="rh-mobile-preview"><PlaylistRows playlists={allPlaylists.slice(0, 5)} compact /></div>
+        <button className="rh-open-browser" onClick={() => setDrawer(true)}><Search /> <ListMusic /> <span>{index.data?.playlist_count ?? 0}</span></button>
         <div className="rh-sync"><span><Clock3 /> {index.data?.last_synced_at ? new Date(index.data.last_synced_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</span><button onClick={() => sync.mutate()} disabled={sync.isPending} aria-label="Synchronize library"><RefreshCw className={sync.isPending ? 'spin' : ''} /></button></div>
       </HardwareWindow>
-      {drawer && createPortal(<PlaylistDrawer close={() => setDrawer(false)}>{browser}</PlaylistDrawer>, document.body)}
+      {drawer && createPortal(<PlaylistDrawer close={closeDrawer}>{browser}</PlaylistDrawer>, document.body)}
     </>
   )
 }
 
-function PlaylistRows({ playlists }: { playlists: Array<{ id: string; name: string; tracks?: { total: number }; external_urls: { spotify: string } }> }) {
-  return <div className="rh-playlists">{playlists.map((playlist, i) => <div key={playlist.id}><span>{String(i + 1).padStart(2, '0')}</span><b>{playlist.name}</b><small>{playlist.tracks?.total ?? '—'}</small><a href={playlist.external_urls.spotify} target="_blank" rel="noreferrer" aria-label={`Open ${playlist.name}`}><ExternalLink /></a></div>)}</div>
+function PlaylistRows({ playlists, compact = false }: { playlists: Array<{ id: string; name: string; tracks?: { total: number }; external_urls: { spotify: string } }>; compact?: boolean }) {
+  return <div className={`rh-playlists ${compact ? 'is-compact' : ''}`}>{playlists.map((playlist, i) => <div key={playlist.id}><span>{String(i + 1).padStart(2, '0')}</span><b>{playlist.name}</b><small>{playlist.tracks?.total ?? '—'}</small><a href={playlist.external_urls.spotify} target="_blank" rel="noreferrer" aria-label={`Open ${playlist.name}`}><ExternalLink /></a></div>)}</div>
 }
 
 function PlaylistDrawer({ close, children }: { close: () => void; children: React.ReactNode }) {
   useEffect(() => {
-    const previous = document.body.style.overflow
+    const scrollY = window.scrollY
+    const previous = {
+      htmlOverflow: document.documentElement.style.overflow,
+      bodyOverflow: document.body.style.overflow,
+      bodyPosition: document.body.style.position,
+      bodyTop: document.body.style.top,
+      bodyWidth: document.body.style.width,
+    }
+    document.documentElement.style.overflow = 'hidden'
     document.body.style.overflow = 'hidden'
+    document.body.style.position = 'fixed'
+    document.body.style.top = `-${scrollY}px`
+    document.body.style.width = '100%'
     const keydown = (event: KeyboardEvent) => { if (event.key === 'Escape') close() }
     window.addEventListener('keydown', keydown)
-    return () => { document.body.style.overflow = previous; window.removeEventListener('keydown', keydown) }
+    return () => {
+      document.documentElement.style.overflow = previous.htmlOverflow
+      document.body.style.overflow = previous.bodyOverflow
+      document.body.style.position = previous.bodyPosition
+      document.body.style.top = previous.bodyTop
+      document.body.style.width = previous.bodyWidth
+      window.removeEventListener('keydown', keydown)
+      window.scrollTo(0, scrollY)
+    }
   }, [close])
   return <aside className="rh-drawer" role="dialog" aria-modal="true" aria-label="Playlists"><header className="rh-title"><span>R // PLAYLISTS</span><button onClick={close} aria-label="Close playlists"><X /></button></header>{children}</aside>
 }

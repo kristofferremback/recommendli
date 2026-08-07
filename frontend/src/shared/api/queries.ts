@@ -54,6 +54,8 @@ export function usePlayback(enabled: boolean, refetchInterval: number | false = 
     enabled,
     refetchInterval: enabled ? refetchInterval : false,
     refetchIntervalInBackground: false,
+    refetchOnWindowFocus: 'always',
+    refetchOnReconnect: 'always',
   })
 }
 
