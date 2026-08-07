@@ -1,7 +1,5 @@
 import { useCurrentUser } from '@/shared/api/queries'
-import { NowPlayingHero } from '@/features/now-playing/components/NowPlayingHero'
-import { DiscoverySection } from '@/features/discovery/components/DiscoverySection'
-import { LibrarySidebar } from '@/features/library-summary/components/LibrarySidebar'
+import { PluginWorkspace } from '@/features/workspace/components/PluginWorkspace'
 
 export function Dashboard() {
   const { data: user, isLoading } = useCurrentUser()
@@ -14,26 +12,7 @@ export function Dashboard() {
     return <LoginPrompt />
   }
 
-  return (
-    <div className="min-h-screen bg-black text-white">
-      {/* Animated mesh gradient background */}
-      <div className="fixed inset-0 bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 opacity-50">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(120,119,198,0.3),rgba(255,255,255,0))]"></div>
-      </div>
-
-      {/* Main content */}
-      <div className="relative z-10 flex flex-col xl:flex-row">
-        {/* Left: Music Experience */}
-        <div className="flex-1">
-          <NowPlayingHero />
-          <DiscoverySection />
-        </div>
-
-        {/* Right: Library Sidebar */}
-        <LibrarySidebar />
-      </div>
-    </div>
-  )
+  return <PluginWorkspace />
 }
 
 function LoadingDashboard() {
