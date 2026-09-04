@@ -5,7 +5,6 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { Toaster } from 'sonner'
 import { queryClient } from '@/shared/api/query-client'
 import App from './App'
-import '@/styles/globals.css'
 import '@/features/workspace/skin.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
