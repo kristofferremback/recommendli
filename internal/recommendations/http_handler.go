@@ -8,13 +8,11 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/kristofferostlund/recommendli/pkg/slogutil"
-	"github.com/kristofferostlund/recommendli/pkg/sortby"
 	"github.com/kristofferostlund/recommendli/pkg/srv"
 	"github.com/zmb3/spotify"
 )
@@ -132,9 +130,6 @@ func (h *httpHandler) listPlaylists(svc Service) http.HandlerFunc {
 			srv.InternalServerError(w, err)
 			return
 		}
-		sort.Slice(playlists, func(i, j int) bool {
-			return sortby.PaddedNumbers(playlists[i].Name, playlists[j].Name, 10, true)
-		})
 		srv.JSON(w, playlists)
 	}
 }
@@ -153,9 +148,6 @@ func (h *httpHandler) getPlaylistMatchingPattern(svc Service) http.HandlerFunc {
 			srv.InternalServerError(w, err)
 			return
 		}
-		sort.Slice(playlists, func(i, j int) bool {
-			return sortby.PaddedNumbers(playlists[i].Name, playlists[j].Name, 10, true)
-		})
 		srv.JSON(w, playlists)
 	}
 }

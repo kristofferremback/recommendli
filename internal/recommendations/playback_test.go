@@ -111,6 +111,7 @@ func fullTrack(id string) spotify.FullTrack {
 
 type fakeSpotifyProvider struct {
 	user              spotify.User
+	playlists         []spotify.SimplePlaylist
 	playbackState     *spotify.PlayerState
 	queue             PlaybackQueue
 	nextCalls         int
@@ -119,7 +120,7 @@ type fakeSpotifyProvider struct {
 
 func (f *fakeSpotifyProvider) ListPlaylists(context.Context, string) ([]spotify.SimplePlaylist, error) {
 	f.listPlaylistCalls++
-	return nil, nil
+	return f.playlists, nil
 }
 func (f *fakeSpotifyProvider) GetPlaylist(context.Context, string) (spotify.FullPlaylist, error) {
 	return spotify.FullPlaylist{}, nil
@@ -170,6 +171,7 @@ func (f *fakeSpotifyProvider) Seek(context.Context, int) error { return nil }
 
 type fakeTrackIndex struct {
 	summary   IndexSummary
+	lookup    []spotify.SimplePlaylist
 	diffCalls int
 	syncCalls int
 }
@@ -178,7 +180,7 @@ func (f *fakeTrackIndex) Has(context.Context, string, spotify.SimpleTrack) (bool
 	return false, nil
 }
 func (f *fakeTrackIndex) Lookup(context.Context, string, spotify.SimpleTrack) ([]spotify.SimplePlaylist, error) {
-	return nil, nil
+	return f.lookup, nil
 }
 func (f *fakeTrackIndex) Diff(context.Context, string, []spotify.SimplePlaylist) ([]spotify.SimplePlaylist, []spotify.SimplePlaylist, []spotify.SimplePlaylist, error) {
 	f.diffCalls++
