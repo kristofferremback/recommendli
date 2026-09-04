@@ -32,7 +32,7 @@
   --gap: 12px;
 }
 
-html { background: var(--bg); color-scheme: dark; scrollbar-gutter: stable; }
+html { background: var(--bg); color-scheme: dark; scrollbar-gutter: stable; -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
 body {
   margin: 0;
   background: var(--bg);
@@ -44,7 +44,12 @@ body {
 * { scrollbar-width: thin; scrollbar-color: #566065 transparent; }
 *::-webkit-scrollbar { width: 8px; height: 8px; }
 *::-webkit-scrollbar-thumb { background: #566065; border-radius: 4px; }
-button { -webkit-appearance: none; appearance: none; margin: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+/* The reset the skin is written against, previously supplied by Tailwind's preflight. */
+*, *::before, *::after { box-sizing: border-box; }
+button, input { -webkit-appearance: none; appearance: none; margin: 0; padding: 0; border: 0; background: none; font: inherit; color: inherit; }
+button { cursor: pointer; }
+a { color: inherit; text-decoration: inherit; }
+img { display: block; max-width: 100%; }
 button:disabled { cursor: default; }
 svg { display: block; flex: 0 0 auto; }
 :focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
@@ -53,7 +58,6 @@ svg { display: block; flex: 0 0 auto; }
 .page {
   min-height: 100svh;
   padding: var(--gap);
-  box-sizing: border-box;
   background: radial-gradient(circle at 45% -10%, #24292c, transparent 35%), var(--bg);
 }
 
@@ -64,7 +68,7 @@ svg { display: block; flex: 0 0 auto; }
   margin: auto;
 }
 @media (min-width: 761px) {
-  .desk > .win { position: absolute; box-sizing: border-box; }
+  .desk > .win { position: absolute; }
   .desk > .win > .win-title { cursor: grab; touch-action: none; }
   .win.dragging { box-shadow: 0 32px 80px #000d, inset 0 1px #fff; }
   .win.dragging .win-title { cursor: grabbing; }
@@ -397,7 +401,7 @@ button.chip.member:hover { background: #283130; }
 .field svg { width: 15px; height: 15px; }
 .field .field-label { font: 700 11px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; }
 .field input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: 14px var(--font-sans); }
-.field input::placeholder { color: #6e787c; }
+.field input::placeholder { color: #6e787c; opacity: 1; }
 .field .key { height: 26px; width: 30px; min-width: 0; }
 .playlists .row-title { font-weight: 500; }
 .sync-row { margin: 0; }
