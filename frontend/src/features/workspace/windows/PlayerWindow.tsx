@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Database, Disc3, ExternalLink, LayoutGrid, Library, ListEnd, ListMusic, Music2, Pause, Play, Plus, SkipBack, SkipForward } from 'lucide-react'
 import { usePlaybackControls, useTrackLibraryStatus } from '@/shared/api/queries'
+import { usePlaybackProgress } from '@/shared/hooks/usePlaybackProgress'
 import type { Playback } from '@/shared/types/spotify'
 import { ErrorChip, Key, Led, Window } from '../chrome'
 import { useDesk } from '../desk'
@@ -134,6 +135,9 @@ function Membership({ trackId }: { trackId: string }) {
   )
 }
 
+/** Keys that move a range input. Tab must not arm a drag, its keyup lands on the next element. */
+const SEEK_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'])
+
 function SeekBar({ progress, duration, disabled, onCommit }: { progress: number; duration: number; disabled: boolean; onCommit: (position: number) => void }) {
   const [value, setValue] = useState(progress)
   const dragging = useRef(false)
@@ -159,22 +163,9 @@ function SeekBar({ progress, duration, disabled, onCommit }: { progress: number;
       onChange={event => setValue(Number(event.target.value))}
       onPointerUp={commit}
       onPointerCancel={commit}
-      onKeyDown={() => { dragging.current = true }}
+      onKeyDown={event => { if (SEEK_KEYS.has(event.key)) dragging.current = true }}
       onKeyUp={commit}
+      onBlur={commit}
     />
   )
-}
-
-function usePlaybackProgress(playback?: Playback) {
-  const [progress, setProgress] = useState(playback?.progress_ms ?? 0)
-  useEffect(() => {
-    const update = () => {
-      const elapsed = playback?.is_playing ? Math.max(0, Date.now() - (playback.timestamp || Date.now())) : 0
-      setProgress(Math.min((playback?.progress_ms ?? 0) + elapsed, playback?.track?.duration_ms ?? Number.MAX_SAFE_INTEGER))
-    }
-    update()
-    const timer = window.setInterval(update, 500)
-    return () => window.clearInterval(timer)
-  }, [playback])
-  return progress
 }

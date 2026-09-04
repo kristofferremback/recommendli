@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
+import { playbackPosition } from '@/shared/hooks/usePlaybackProgress'
 import type { Playback, QueueSkipRequest, Track } from '@/shared/types/spotify'
 
 export const queryKeys = {
@@ -47,10 +48,15 @@ export function useIndexSummary(refetchInterval: number | false) {
   })
 }
 
+/** progress_ms is the position when the response arrived, so record that moment on our own clock. */
+async function fetchPlayback(): Promise<Playback> {
+  return { ...(await api.getPlayback()), fetched_at: Date.now() }
+}
+
 export function usePlayback(enabled: boolean, refetchInterval: number | false = 4000) {
   return useQuery({
     queryKey: queryKeys.playback,
-    queryFn: api.getPlayback,
+    queryFn: fetchPlayback,
     enabled,
     refetchInterval: enabled ? refetchInterval : false,
     refetchIntervalInBackground: false,
@@ -109,6 +115,8 @@ export function usePlaybackControls() {
     if (playback) queryClient.setQueryData(queryKeys.playback, playback)
   }
   const optimistic = (update: (playback: Playback) => Playback): PlaybackMutationContext => {
+    // A poll already in flight would land on top of the optimistic state and undo it.
+    void queryClient.cancelQueries({ queryKey: queryKeys.playback })
     const previous = current()
     if (previous) setPlayback(update(previous))
     return { previous }
@@ -119,7 +127,7 @@ export function usePlaybackControls() {
       active: true,
       is_playing: true,
       progress_ms: 0,
-      timestamp: Date.now(),
+      fetched_at: Date.now(),
       track,
     } : playback)
     return { ...context, expectedTrackId: track?.id }
@@ -133,7 +141,8 @@ export function usePlaybackControls() {
   }
   const reconcile = (matches: (playback: Playback) => boolean) => {
     void reconcilePlayback(matches).then(playback => {
-      if (playback) setPlayback(playback)
+      // A regular poll that arrived meanwhile is newer than the last reconcile sample.
+      if (playback && !((current()?.fetched_at ?? 0) > playback.fetched_at)) setPlayback(playback)
       refreshTimeline()
     })
   }
@@ -142,7 +151,7 @@ export function usePlaybackControls() {
     play: useMutation<void, Error, string | undefined, PlaybackMutationContext>({
       mutationFn: api.play,
       onMutate: trackId => {
-        if (!trackId) return optimistic(playback => ({ ...playback, is_playing: true, timestamp: Date.now() }))
+        if (!trackId) return optimistic(playback => ({ ...playback, is_playing: true, fetched_at: Date.now() }))
         const queue = queryClient.getQueryData<{ tracks: Track[] }>(queryKeys.playbackQueue)
         const history = queryClient.getQueryData<Array<{ track: Track }>>(queryKeys.playbackHistory)
         return optimisticTrack(queue?.tracks.find(track => track.id === trackId) ?? history?.find(item => item.track.id === trackId)?.track)
@@ -152,7 +161,7 @@ export function usePlaybackControls() {
     }),
     pause: useMutation<void, Error, void, PlaybackMutationContext>({
       mutationFn: api.pause,
-      onMutate: () => optimistic(playback => ({ ...playback, is_playing: false })),
+      onMutate: () => optimistic(playback => ({ ...playback, is_playing: false, progress_ms: playbackPosition(playback, Date.now()), fetched_at: Date.now() })),
       onError: rollback,
       onSuccess: () => reconcile(playback => !playback.is_playing),
     }),
@@ -165,22 +174,19 @@ export function usePlaybackControls() {
       onError: rollback,
       onSuccess: (_data, _variables, context) => reconcile(playback => context?.expectedTrackId
         ? playback.track?.id === context.expectedTrackId
-        : playback.track?.id !== context?.previous?.track?.id),
+        : movedOn(playback, context?.previous)),
     }),
     previous: useMutation<void, Error, void, PlaybackMutationContext>({
       mutationFn: api.previous,
-      onMutate: () => {
-        const history = queryClient.getQueryData<Array<{ track: Track }>>(queryKeys.playbackHistory)
-        return optimisticTrack(history?.[0]?.track)
-      },
+      // Spotify steps back through its own context, which recently played does not mirror,
+      // so no track is guessed. The state change comes from the reconcile poll.
+      onMutate: () => optimistic(playback => ({ ...playback, is_playing: true, progress_ms: 0, fetched_at: Date.now() })),
       onError: rollback,
-      onSuccess: (_data, _variables, context) => reconcile(playback => context?.expectedTrackId
-        ? playback.track?.id === context.expectedTrackId
-        : playback.track?.id !== context?.previous?.track?.id),
+      onSuccess: (_data, _variables, context) => reconcile(playback => movedOn(playback, context?.previous)),
     }),
     seek: useMutation<void, Error, number, PlaybackMutationContext>({
       mutationFn: api.seek,
-      onMutate: positionMs => optimistic(playback => ({ ...playback, progress_ms: positionMs, timestamp: Date.now() })),
+      onMutate: positionMs => optimistic(playback => ({ ...playback, progress_ms: positionMs, fetched_at: Date.now() })),
       onError: rollback,
       onSuccess: (_data, positionMs) => reconcile(playback => Math.abs(playback.progress_ms - positionMs) < 3000),
     }),
@@ -196,13 +202,22 @@ export function usePlaybackControls() {
   }
 }
 
+/**
+ * Next and previous either change the track or restart it, and a position can only
+ * go backwards through a state change. Spotify's timestamp is not trusted for this:
+ * some accounts have been seen stamping it per request.
+ */
+function movedOn(playback: Playback, before?: Playback) {
+  return !before || playback.track?.id !== before.track?.id || playback.progress_ms < before.progress_ms
+}
+
 async function reconcilePlayback(matches: (playback: Playback) => boolean): Promise<Playback | undefined> {
   const delays = [120, 250, 450, 800, 1300, 2000]
   let latest: Playback | undefined
   for (const delay of delays) {
     await new Promise(resolve => window.setTimeout(resolve, delay))
     try {
-      latest = await api.getPlayback()
+      latest = await fetchPlayback()
       if (matches(latest)) return latest
     } catch {
       // The normal query error state handles persistent Spotify/API failures.

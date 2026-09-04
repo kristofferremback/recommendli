@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Clock3, ListEnd, Play, SkipForward } from 'lucide-react'
 import { usePlaybackControls, usePlaybackHistory, usePlaybackQueue } from '@/shared/api/queries'
 import { useDocumentVisibility } from '@/shared/hooks/useDocumentVisibility'
+import { usePlaybackProgress } from '@/shared/hooks/usePlaybackProgress'
 import type { Playback } from '@/shared/types/spotify'
 import { ErrorChip, Key, TrackList, TrackRow, Window } from '../chrome'
 import { formatTime, padIndex } from '../lib/format'
@@ -12,6 +13,7 @@ export function QueueWindow({ playback, close }: { playback?: Playback; close: (
   const queue = usePlaybackQueue(visible)
   const history = usePlaybackHistory(visible)
   const controls = usePlaybackControls()
+  const progress = usePlaybackProgress(playback)
   const historyItems = history.data ?? []
   const queueItems = queue.data?.tracks ?? []
 
@@ -20,7 +22,7 @@ export function QueueWindow({ playback, close }: { playback?: Playback; close: (
       <div className="now-line">
         <Play aria-hidden="true" />
         <b>{playback?.track?.name ?? 'Nothing playing'}</b>
-        <span>{formatTime(playback?.progress_ms ?? 0)} / {formatTime(playback?.track?.duration_ms ?? 0)}</span>
+        <span>{formatTime(progress)} / {formatTime(playback?.track?.duration_ms ?? 0)}</span>
       </div>
       <div className="tabs" role="group" aria-label="Timeline">
         <Key aria-pressed={tab === 'history'} lit={tab === 'history'} onClick={() => setTab('history')}><Clock3 /> History</Key>

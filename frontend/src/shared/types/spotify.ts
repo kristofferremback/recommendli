@@ -87,7 +87,10 @@ export interface Playback {
   active: boolean
   is_playing: boolean
   progress_ms: number
+  /** Spotify's clock at the last state change. Not the time of progress_ms. */
   timestamp: number
+  /** Client clock when progress_ms arrived. Stamped in queries.ts, not sent by the server. */
+  fetched_at: number
   track?: Track
   device?: PlaybackDevice
   context?: PlaybackContext
