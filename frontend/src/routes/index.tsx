@@ -1,6 +1,7 @@
 import { Database, Music2, Radio, ShieldCheck } from 'lucide-react'
 import { useCurrentUser } from '@/shared/api/queries'
-import { PluginWorkspace } from '@/features/workspace/components/PluginWorkspace'
+import { PluginWorkspace } from '@/features/workspace/PluginWorkspace'
+import { Led, Window } from '@/features/workspace/chrome'
 
 export function Dashboard() {
   const user = useCurrentUser()
@@ -11,25 +12,29 @@ export function Dashboard() {
 
 function ConnectionPanel({ loading = false }: { loading?: boolean }) {
   return (
-    <main className="rh-page rh-connection-page">
-      <section className="rh-window rh-connection">
-        <i className="rh-screw tl" /><i className="rh-screw tr" /><i className="rh-screw bl" /><i className="rh-screw br" />
-        <header className="rh-title"><span>R // CONNECTION</span><div className="rh-window-dots"><i /><i /><i /></div></header>
-        <div className="rh-brandbar"><strong>recommendli</strong><i className={`rh-connection-led ${loading ? 'busy' : ''}`} /></div>
-        <div className="rh-well">
-          <div className="rh-lcd rh-connection-display">
-            <Radio aria-hidden="true" />
-            <strong>{loading ? 'CONNECTING' : 'SPOTIFY OFFLINE'}</strong>
-            <div className={`rh-signal ${loading ? 'active' : ''}`} aria-hidden="true">{[1, 2, 3, 4, 5, 6].map(i => <i key={i} />)}</div>
+    <main className="page connect-page">
+      <div className="connect">
+        <Window code="R // CONNECTION" plugin="connect">
+          <div className="brandbar"><strong>recommendli</strong><Led busy={loading} /></div>
+          <div className="well">
+            <div className="lcd connect-display" aria-live="polite">
+              <Radio aria-hidden="true" />
+              <strong>{loading ? 'Connecting' : 'Spotify offline'}</strong>
+              <div className={`signal ${loading ? 'active' : ''}`} aria-hidden="true">{[1, 2, 3, 4, 5, 6].map(i => <i key={i} />)}</div>
+            </div>
           </div>
-        </div>
-        {!loading && <a className="rh-connect-button" href="/recommendations/v1/spotify/auth/ui-redirect?url=/"><Music2 /> CONNECT SPOTIFY</a>}
-        <div className="rh-permissions">
-          <span><Database />Reads playlists</span>
-          <span><ShieldCheck />Creates playlists</span>
-          <span><Radio />Controls active device</span>
-        </div>
-      </section>
+          {!loading && (
+            <div className="build">
+              <a className="key primary big" href="/recommendations/v1/spotify/auth/ui-redirect?url=/"><Music2 /> Connect Spotify</a>
+            </div>
+          )}
+          <div className="permissions">
+            <span><Database aria-hidden="true" />Reads your playlists</span>
+            <span><ShieldCheck aria-hidden="true" />Creates the discovery playlist</span>
+            <span><Radio aria-hidden="true" />Controls the active device</span>
+          </div>
+        </Window>
+      </div>
     </main>
   )
 }
