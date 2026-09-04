@@ -216,7 +216,10 @@ sudo systemctl restart recommendli
 
 ## Testing
 
-Currently no test files exist in the repository. When adding tests:
-- Place test files adjacent to implementation (`*_test.go`)
+Go tests live next to the code they cover (`*_test.go`) and run with `go test ./...`.
+The fakes in `internal/recommendations/playback_test.go` stand in for Spotify, the
+track index and the key-value store, so service behavior can be tested without a
+Spotify account.
+
 - Use standard Go testing conventions
 - Consider table-driven tests for different user preferences/scoring scenarios

@@ -10,6 +10,7 @@ import (
 
 	"github.com/kristofferostlund/recommendli/pkg/paginator"
 	"github.com/kristofferostlund/recommendli/pkg/slogutil"
+	"github.com/kristofferostlund/recommendli/pkg/sortby"
 	"github.com/zmb3/spotify"
 )
 
@@ -272,6 +273,20 @@ func dummyPlaylistFor(name string, tracks []spotify.FullTrack) spotify.FullPlayl
 	}
 	return pl
 }
+
+// sortPlaylists puts playlists in the order every list in the app shows them:
+// descending, and aware of the numbers in a name, so a library named
+// "Metal 699 - ..." down to "Metal 1 - ..." is listed newest first.
+func sortPlaylists[T any](playlists []T, name func(T) string) {
+	compare := sortby.Natural()
+	sort.SliceStable(playlists, func(i, j int) bool {
+		return compare(name(playlists[i]), name(playlists[j])) > 0
+	})
+}
+
+func simplePlaylistName(p spotify.SimplePlaylist) string { return p.Name }
+
+func fullPlaylistName(p spotify.FullPlaylist) string { return p.Name }
 
 func filterSimplePlaylist(playlists []spotify.SimplePlaylist, pred func(p spotify.SimplePlaylist) bool) []spotify.SimplePlaylist {
 	filtered := make([]spotify.SimplePlaylist, 0)

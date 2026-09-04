@@ -45,6 +45,7 @@ func (s *service) getIndexSummary(ctx context.Context, userID string) (IndexSumm
 	if summary.Playlists == nil {
 		summary.Playlists = []spotify.SimplePlaylist{}
 	}
+	sortPlaylists(summary.Playlists, simplePlaylistName)
 	return summary, nil
 }
 

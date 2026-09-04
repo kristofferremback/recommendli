@@ -120,7 +120,12 @@ func (s *service) ListPlaylistsForCurrentUser(ctx context.Context) ([]spotify.Si
 	if err != nil {
 		return nil, err
 	}
-	return s.spotify.ListPlaylists(ctx, usr.ID)
+	playlists, err := s.spotify.ListPlaylists(ctx, usr.ID)
+	if err != nil {
+		return nil, err
+	}
+	sortPlaylists(playlists, simplePlaylistName)
+	return playlists, nil
 }
 
 func (s *service) GetCurrentUsersPlaylistMatchingPattern(ctx context.Context, pattern string) ([]spotify.FullPlaylist, error) {
@@ -141,7 +146,12 @@ func (s *service) GetCurrentUsersPlaylistMatchingPattern(ctx context.Context, pa
 		return nil, nil
 	}
 
-	return s.spotify.PopulatePlaylists(ctx, matching)
+	populated, err := s.spotify.PopulatePlaylists(ctx, matching)
+	if err != nil {
+		return nil, err
+	}
+	sortPlaylists(populated, fullPlaylistName)
+	return populated, nil
 }
 
 func (s *service) GetPlaylist(ctx context.Context, playlistID string) (spotify.FullPlaylist, error) {
@@ -203,6 +213,7 @@ func (s *service) CheckPlayingTrackInLibrary(ctx context.Context) (spotify.FullT
 		return spotify.FullTrack{}, nil, fmt.Errorf("looking up track in library: %w", err)
 	}
 	if len(pls) > 0 {
+		sortPlaylists(pls, simplePlaylistName)
 		playlistNames := make([]string, 0, len(pls))
 		for _, p := range pls {
 			playlistNames = append(playlistNames, p.Name)
@@ -261,6 +272,7 @@ func (s *service) LookupTrackInLibrary(ctx context.Context, trackID string) ([]s
 	if playlists == nil {
 		playlists = []spotify.SimplePlaylist{}
 	}
+	sortPlaylists(playlists, simplePlaylistName)
 	return playlists, nil
 }
 
