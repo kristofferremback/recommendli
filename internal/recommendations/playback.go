@@ -15,8 +15,9 @@ var (
 )
 
 // Playback is the lightweight state polled by the remote player. ProgressMs is
-// the position at Timestamp, allowing the UI to animate progress locally
-// between requests.
+// the position when Spotify answered. Timestamp is Spotify's clock at the last
+// state change (play, pause, seek, skip), so the UI cannot derive the current
+// position from it and stamps the arrival time itself.
 type Playback struct {
 	Active       bool                     `json:"active"`
 	IsPlaying    bool                     `json:"is_playing"`

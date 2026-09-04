@@ -80,7 +80,7 @@ export const api = {
     return res.json()
   },
 
-  getPlayback: async (): Promise<Playback> => {
+  getPlayback: async (): Promise<Omit<Playback, 'fetched_at'>> => {
     const res = await fetchAPI(`${BASE_URL}/playback`)
     return res.json()
   },
