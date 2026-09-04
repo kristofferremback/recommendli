@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { Database, Disc3, ExternalLink, Library, ListEnd, ListMusic, Music2, Pause, Play, Plus, SkipBack, SkipForward } from 'lucide-react'
+import { Database, Disc3, ExternalLink, LayoutGrid, Library, ListEnd, ListMusic, Music2, Pause, Play, Plus, SkipBack, SkipForward } from 'lucide-react'
 import { usePlaybackControls, useTrackLibraryStatus } from '@/shared/api/queries'
 import type { Playback } from '@/shared/types/spotify'
 import { ErrorChip, Key, Led, Window } from '../chrome'
+import { useDesk } from '../desk'
 import { artistNames, formatTime } from '../lib/format'
 import type { PluginName } from '../plugins'
 
@@ -25,9 +26,13 @@ export function PlayerWindow({ playback, loading, error, retry, open, toggle, ha
   const commandPending = controls.play.isPending || controls.pause.isPending || controls.next.isPending || controls.previous.isPending
   const commandFailed = [controls.play, controls.pause, controls.next, controls.previous, controls.seek, controls.skipQueue].some(command => command.isError)
   const isOpen = (plugin: PluginName) => open.includes(plugin)
+  const desk = useDesk()
+  const tidy = desk.desktop && (
+    <button type="button" onClick={desk.tidy} aria-label="Tidy windows" title="Tidy windows"><LayoutGrid /></button>
+  )
 
   return (
-    <Window code="R // PLAYER" plugin="player">
+    <Window code="R // PLAYER" plugin="player" controls={tidy}>
       <div className="brandbar">
         <strong>recommendli</strong>
         <nav className="launcher" aria-label="Plug-ins">
