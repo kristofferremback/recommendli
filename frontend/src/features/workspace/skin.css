@@ -32,7 +32,7 @@
   --gap: 12px;
 }
 
-html { background: var(--bg); color-scheme: dark; }
+html { background: var(--bg); color-scheme: dark; scrollbar-gutter: stable; }
 body {
   margin: 0;
   background: var(--bg);
@@ -57,23 +57,37 @@ svg { display: block; flex: 0 0 auto; }
   background: radial-gradient(circle at 45% -10%, #24292c, transparent 35%), var(--bg);
 }
 
+/* The desk: on desktop every window is placed by the window manager, see desk.tsx */
 .desk {
+  position: relative;
   max-width: 1400px;
   margin: auto;
-  display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: 14px;
-  align-items: start;
 }
-.win-player { grid-column: span 4; }
-.win-queue { grid-column: span 8; }
-.main-stack { grid-column: span 8; display: grid; gap: 14px; }
-.win-library { grid-column: span 4; }
-
-/* Tablets and small laptops: two columns, so no window drops under 360px */
-@media (max-width: 1100px) and (min-width: 761px) {
-  .desk { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .win-player, .win-queue, .main-stack, .win-library { grid-column: span 1; }
+@media (min-width: 761px) {
+  .desk > .win { position: absolute; box-sizing: border-box; }
+  .desk > .win > .win-title { cursor: grab; touch-action: none; }
+  .win.dragging { box-shadow: 0 32px 80px #000d, inset 0 1px #fff; }
+  .win.dragging .win-title { cursor: grabbing; }
+  .win.dragging .win-body { pointer-events: none; }
+  .win.shaded .win-body { display: none; }
+  .win.shaded .win-title { border-bottom: 0; border-radius: calc(var(--radius) - 1px); }
+  .win.shaded .win-controls button[aria-pressed="true"] svg { transform: rotate(180deg); }
+  .win-resize {
+    position: absolute; z-index: 4; right: 2px; bottom: 2px; width: 18px; height: 18px;
+    cursor: nwse-resize; touch-action: none;
+    background: repeating-linear-gradient(135deg, transparent 0 3px, #6f787d 3px 4px);
+    clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  }
+  .win-resize.wide { cursor: ew-resize; }
+  .win-resize:hover { background: repeating-linear-gradient(135deg, transparent 0 3px, #2b3234 3px 4px); }
+  .win-title:focus-visible { outline-offset: -2px; }
+  /* Sized windows: the list takes the leftover height and scrolls. Scoped under the desk so these beat the base rules below. */
+  .desk > .win > .win-body { flex: 1 1 auto; }
+  .desk > .win .timeline { flex: 1 1 auto; min-height: 0; grid-auto-rows: minmax(0, 1fr); align-items: stretch; }
+  .desk > .win :is(.tracks, .library, .playlists) { flex: 1 1 auto; min-height: 0; }
+  .desk > .win .library { display: flex; flex-direction: column; }
+  .desk > .win .library > :not(.playlists) { flex: 0 0 auto; }
+  .desk > .win .list ol { flex: 1 1 auto; }
 }
 
 /* Window chrome */
@@ -314,7 +328,6 @@ button.chip.member:hover { background: #283130; }
 .now-line b { font: 700 14px/1.25 var(--font-sans); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .now-line span { font: 700 12px/1 var(--font-mono); color: var(--green-dim); font-variant-numeric: tabular-nums; }
 .timeline { margin: 10px var(--gap) var(--gap); display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; }
-.timeline .list ol { max-height: 420px; }
 .tabs { display: none; margin: 10px var(--gap) 0; grid-template-columns: 1fr 1fr; gap: 6px; }
 .tabs .key { width: 100%; }
 @container (max-width: 560px) {
@@ -363,7 +376,6 @@ button.chip.member:hover { background: #283130; }
 .result-head strong { font: 700 22px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
 .result-head .key { border-color: var(--green-faint); }
 .tracks { margin: 0 var(--gap) var(--gap); }
-.tracks ol { max-height: 560px; }
 @container (max-width: 640px) {
   .row.has-album { grid-template-columns: 28px 36px minmax(0, 1fr) 44px auto; }
   .row .album { display: none; }
@@ -387,7 +399,6 @@ button.chip.member:hover { background: #283130; }
 .field input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: 14px var(--font-sans); }
 .field input::placeholder { color: #6e787c; }
 .field .key { height: 26px; width: 30px; min-width: 0; }
-.playlists ol { max-height: 400px; }
 .playlists .row-title { font-weight: 500; }
 .sync-row { margin: 0; }
 .sync-row .key { margin-left: auto; }
@@ -421,7 +432,7 @@ button.chip.member:hover { background: #283130; }
   :root { --tap: 44px; }
   .page { padding: 10px; }
   .desk { display: flex; flex-direction: column; align-items: stretch; max-width: 520px; gap: 12px; }
-  .main-stack { display: contents; }
+  .win-title { cursor: default; }
   .win { flex: 0 0 auto; }
   .win-controls button { width: 44px; height: 32px; }
   .brandbar { min-height: 64px; padding: 0 10px 0 16px; }
